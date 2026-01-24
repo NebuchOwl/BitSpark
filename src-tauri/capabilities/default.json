@@ -32,8 +32,25 @@
     "dialog:default",
     "fs:default",
     {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        {
+          "path": "$TEMP/**"
+        },
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
       "identifier": "fs:allow-write",
       "allow": [
+        {
+          "path": "$TEMP/**"
+        },
         {
           "path": "**"
         }

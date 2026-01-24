@@ -37,25 +37,46 @@ window.showToast = function (message, type = 'info') {
   // bg-theme-secondary/90 ensures it adapts to light/dark themes while being transparent
   // md:min-w-[300px] ensures it's not too small on desktop, but w-full on mobile
   // border-l-4 provides the color indicator
-  const baseClasses = 'bg-gray-800/95 backdrop-blur-md shadow-xl p-4 rounded-r-lg border-l-4 flex items-center transform transition-all duration-300 opacity-0 translate-x-10 pointer-events-auto z-50 mb-3 w-[90vw] max-w-sm md:w-auto md:min-w-[300px]';
+  const baseClasses = 'bg-gray-800/95 backdrop-blur-md shadow-xl p-4 rounded-r-lg border-l-4 flex items-center gap-3 transform transition-all duration-300 opacity-0 translate-x-10 pointer-events-auto z-50 mb-3 w-[90vw] max-w-sm md:w-auto md:min-w-[300px]';
 
-  const typeClasses = {
-    success: 'border-green-500 text-white',
-    error: 'border-red-500 text-white',
-    info: 'border-blue-500 text-white'
+  const typeConfig = {
+    success: {
+      classes: 'border-green-500 text-white',
+      icon: `<svg class="w-5 h-5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+      </svg>`
+    },
+    error: {
+      classes: 'border-red-500 text-white',
+      icon: `<svg class="w-5 h-5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>`
+    },
+    info: {
+      classes: 'border-blue-500 text-white',
+      icon: `<svg class="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>`
+    }
   };
 
-  toast.className = `${baseClasses} ${typeClasses[type] || typeClasses.info}`;
+  const config = typeConfig[type] || typeConfig.info;
+  toast.className = `${baseClasses} ${config.classes}`;
+
+  // Icon element
+  const iconDiv = document.createElement('div');
+  iconDiv.innerHTML = config.icon;
 
   const msgDiv = document.createElement('div');
-  msgDiv.className = 'flex-1 font-medium whitespace-pre-wrap text-sm'; // Variable font size
+  msgDiv.className = 'flex-1 font-medium whitespace-pre-wrap text-sm';
   msgDiv.textContent = message;
 
   const closeBtn = document.createElement('button');
-  closeBtn.className = 'ml-4 text-gray-400 hover:text-white font-bold opacity-70 hover:opacity-100 transition-opacity';
+  closeBtn.className = 'ml-2 text-gray-400 hover:text-white font-bold opacity-70 hover:opacity-100 transition-opacity';
   closeBtn.textContent = '✕';
   closeBtn.onclick = () => toast.remove();
 
+  toast.appendChild(iconDiv);
   toast.appendChild(msgDiv);
   toast.appendChild(closeBtn);
 
@@ -803,7 +824,7 @@ const processManager = {
         </div>
         ${['processing', 'pending', 'cancelled', 'done'].includes(job.status) && job.progress > 0 ? `
         <div class="queue-progress-bar mt-2">
-            <div class="queue-progress-fill" style="width: ${job.progress}%"></div>
+            <div class="queue-progress-fill${job.status !== 'processing' ? ' queue-progress-fill-static' : ''}" style="width: ${job.progress}%"></div>
         </div>` : ''}
         <div class="flex justify-between text-xs text-gray-500 mt-1">
             <span>${job.info}</span>
@@ -1823,10 +1844,18 @@ if (mergerActionBtn) {
     if (!output) return;
 
     try {
-      // Generate Concat List
-      const listContent = mergerFiles.map(f => `file '${f.replace(/\\/g, '/')}'`).join('\n');
+      // Generate Concat List with proper path escaping
+      // Escape single quotes in file paths for FFmpeg concat format
+      const listContent = mergerFiles.map(f => {
+        const escapedPath = f.replace(/\\/g, '/').replace(/'/g, "'\\''");
+        return `file '${escapedPath}'`;
+      }).join('\n');
+
       const tempD = await tempDir();
       const listPath = await join(tempD, `concat_list_${Date.now()}.txt`);
+
+      console.log('[Merge] Writing concat list to:', listPath);
+      console.log('[Merge] Files to merge:', mergerFiles);
 
       await writeTextFile(listPath, listContent);
 
@@ -1843,10 +1872,13 @@ if (mergerActionBtn) {
       mergerFiles = [];
       renderMergerList();
       showToast('Merge task queued', 'success');
+      Logger.log({ type: 'info', message: `Merge queued: ${mergerFiles.length} files → ${output}` });
 
     } catch (e) {
-      console.error(e);
-      showToast('Merge Error', 'error');
+      console.error('[Merge Error]', e);
+      const errorMsg = e.message || e.toString() || 'Unknown error';
+      showToast(`Merge failed: ${errorMsg}`, 'error');
+      Logger.log({ type: 'error', message: 'Merge Error', details: errorMsg });
     }
   });
 }

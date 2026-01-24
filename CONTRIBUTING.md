@@ -1,6 +1,6 @@
-# Developer & Contributing Guide
+# Contributing to Video Optimizer 2.0
 
-Thank you for your interest in improving Video Optimizer! This guide focuses on helping you understand the codebase and build the application for different platforms.
+Thank you for your interest in improving Video Optimizer 2.0! This guide focuses on helping you understand the codebase and build the application for different platforms.
 
 ## 🏗️ Project Architecture
 
@@ -58,21 +58,9 @@ The output will be found in `src-tauri/target/release/bundle/`.
 
 ## 🚀 GitHub Workflow
 
-This repository includes a **GitHub Action** (`.github/workflows/release.yml`) that automatically builds the application for Windows, macOS, and Linux whenever you create a new release tag.
+This repository includes a **GitHub Action** (`.github/workflows/release.yml`) that automatically builds the application for Windows, macOS, and Linux whenever you create a new release tag (e.g., `v2.0.0`).
 
-1.  **Commit & Push**: Push your final code to the `master` branch.
-2.  **Tag Release**: Create a semantic version tag (e.g., `v0.3.0`).
-    ```bash
-    git tag v0.3.0
-    git push origin v0.3.0
-    ```
-3.  **Automatic Build**: Go to the "Actions" tab on GitHub. The `Release` workflow will trigger automatically.
-4.  **Distribution**: Once compiled (approx. 5-10 mins), the installers (`.exe`, `.dmg`, `.deb`) will appear in the **Releases** section.
-
-## ⚡ Coding Standards
-
-To maintain project quality, please adhere to the following:
-*   **Clean Code**: Write self-documenting code. Variable names should be descriptive.
-*   **No Clutter**: Remove unused comments and `console.log` statements before committing.
-*   **Modern JS**: Use ES6+ features (arrow functions, async/await, modules).
-*   **Rust Safety**: Ensure all `unwrap()` calls are safe or handled via `match`/`if let`.
+1.  Push your code.
+2.  Create a Tag: `git tag v2.0.0 && git push origin v2.0.0`
+3.  Go to the "Actions" tab on GitHub to see the build progress.
+4.  Once compiled, the executables will appear in the "Releases" section.

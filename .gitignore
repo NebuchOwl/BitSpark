@@ -15,6 +15,7 @@ src-tauri/binaries/
 
 # Internal Tools & AI Agents
 .vscode/
+.agent/
 
 # Project Management & Internal Docs
 docs/

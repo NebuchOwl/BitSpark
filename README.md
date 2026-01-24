@@ -1,5 +1,5 @@
-# Video Optimizer
-> **Version 0.3.0 (Beta)**
+# Video Optimizer 2.0
+> **v2.0.0**
 [![Release](https://img.shields.io/github/v/release/NebuchOwl/video-optimizer)](https://github.com/NebuchOwl/video-optimizer/releases)
 
 
@@ -20,8 +20,12 @@ A powerful, high-performance video toolkit built with **Tauri v2**, **Rust**, an
     *   Stitch multiple clips together into a single file.
 *   **Audio Lab**:
     *   Extract MP3, Mute Tracks, or Normalize Audio Levels.
-    *   **Settings Hub**: Centralized configuration with a tabbed interface (General, Processing, Logs, Appearance).
-    *   **Theming Engine**: Choose from **Cosmic**, **Light**, **Midnight**, or **Sunset** with a live visual selector.
+*   **Settings Hub**:
+    *   **Centralized Configuration**: Tabbed interface for General, Processing, Logs, Appearance, and About.
+    *   **Defaults Engine**: Set preferred optimization profiles and target formats globally.
+    *   **Premium Themes**: Choose from **Cosmic**, **Light**, **Midnight**, or **Sunset** with a redesigned visual selector.
+*   **Enhanced UX**:
+    *   **Drag & Drop**: Seamlessly add media files and folders.
 *   **Media Inspector**:
     *   Detailed metadata analysis for any media file.
 
