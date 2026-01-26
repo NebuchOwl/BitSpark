@@ -6,6 +6,7 @@ import { writeTextFile, readFile } from '@tauri-apps/plugin-fs';
 import { tempDir, appCacheDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 
 const SUPPORTED_EXTENSIONS = [
@@ -74,7 +75,7 @@ window.showToast = function (message, type = 'info') {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'ml-2 text-gray-400 hover:text-white font-bold opacity-70 hover:opacity-100 transition-opacity';
   closeBtn.textContent = '✕';
-  closeBtn.onclick = () => toast.remove();
+  closeBtn.addEventListener('click', () => toast.remove());
 
   toast.appendChild(iconDiv);
   toast.appendChild(msgDiv);
@@ -95,12 +96,16 @@ window.showToast = function (message, type = 'info') {
 }
 
 // Logo Animation Helper
+// Logo Animation Helper
 function toggleLogoAnimation(active) {
-  const logo = document.getElementById('app-logo');
-  if (logo) {
-    if (active) logo.classList.add('animate-spin-slow');
-    else logo.classList.remove('animate-spin-slow');
-  }
+  const logos = [document.getElementById('app-logo'), document.getElementById('titlebar-icon')];
+
+  logos.forEach(logo => {
+    if (logo) {
+      if (active) logo.classList.add('animate-spin-slow');
+      else logo.classList.remove('animate-spin-slow');
+    }
+  });
 }
 
 // Override default alert
@@ -479,6 +484,52 @@ const processManager = {
   init() {
     this.load();
     Logger.init();
+    this.bindEvents();
+  },
+
+  bindEvents() {
+    // Static Queue Controls
+    const btnActive = document.getElementById('queue-view-active');
+    const btnHistory = document.getElementById('queue-view-history');
+
+    if (btnActive) btnActive.addEventListener('click', () => this.setView('active'));
+    if (btnHistory) btnHistory.addEventListener('click', () => this.setView('history'));
+
+    // Queue Clear Button
+    const btnClear = document.getElementById('queue-clear-btn');
+    if (btnClear) {
+      btnClear.addEventListener('click', () => {
+        if (this.viewMode === 'history') this.clearHistory();
+        else this.clearCompleted();
+      });
+    }
+
+    // Logs Modal Controls
+    const logsClose = document.getElementById('modal-logs-close-btn');
+    const logsHeaderClose = document.getElementById('modal-logs-header-close-btn');
+    const logsCopy = document.getElementById('modal-logs-copy-btn');
+
+    if (logsClose) logsClose.addEventListener('click', () => document.getElementById('modal-logs').classList.add('hidden'));
+    if (logsHeaderClose) logsHeaderClose.addEventListener('click', () => document.getElementById('modal-logs').classList.add('hidden'));
+    if (logsCopy) logsCopy.addEventListener('click', () => this.copyLogs());
+
+    // Event Delegation for Queue List
+    const list = document.getElementById('queue-list');
+    if (list) {
+      list.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+
+        if (!action || !id) return;
+
+        if (action === 'view-logs') this.viewLogs(id);
+        if (action === 'retry') this.retryJob(id);
+        if (action === 'cancel') this.cancelJob(id);
+      });
+    }
   },
 
   setView(mode) {
@@ -674,6 +725,7 @@ const processManager = {
     this.updateUI();
 
     try {
+      showToast(`Spawning FFmpeg...`, 'info');
       const cmd = Command.sidecar(job.command, job.args);
 
       cmd.on('close', data => {
@@ -687,7 +739,7 @@ const processManager = {
         } else {
           job.status = 'failed';
           job.info = `Exit Code: ${data.code}`;
-          showToast(`Failed: ${job.name}`, 'error');
+          showToast(`Failed: ${job.name} (Code ${data.code})`, 'error');
           Logger.log({ type: 'error', message: `Job Failed: ${job.name}`, details: `Exit Code: ${data.code}` });
         }
         this.isProcessing = false;
@@ -701,6 +753,7 @@ const processManager = {
         if (job.status === 'cancelled') return;
         job.status = 'failed';
         job.info = 'Error';
+        showToast(`Spawn Error: ${JSON.stringify(err)}`, 'error');
         this.isProcessing = false;
         this.save();
         this.updateUI();
@@ -708,41 +761,19 @@ const processManager = {
         Logger.log({ type: 'error', message: `Execution Error: ${job.name}`, details: JSON.stringify(err) });
       });
 
-      cmd.stderr.on('data', line => {
-        if (job.status === 'cancelled') return;
-        job.logs.push(line);
-        if (job.logs.length > 2000) job.logs.shift(); // Cap logs
-
-        if (job.duration) {
-          const timeMatch = line.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
-          if (timeMatch) {
-            const time = parseTimeHelper(timeMatch[1]);
-            const pct = Math.min(100, (time / job.duration) * 100);
-            job.progress = pct;
-            job.info = `${Math.round(pct)}%`;
-            this.updateUI();
-            // Don't save on every tick (perf)
-          }
-        }
-        if (!job.duration) {
-          const durMatch = line.match(/Duration: (\d{2}:\d{2}:\d{2}\.\d+)/);
-          if (durMatch) {
-            job.duration = parseTimeHelper(durMatch[1]);
-            this.save(); // Save duration once found
-          }
-        }
-      });
-
       const child = await cmd.spawn();
       job.child = child;
+      showToast(`Process Started (PID: ${child.pid})`, 'success');
 
     } catch (e) {
       job.status = 'failed';
       job.info = 'Exception';
+      showToast(`Exception: ${e.message}`, 'error');
+      console.error(e);
       this.isProcessing = false;
       this.save();
       this.updateUI();
-      toggleLogoAnimation(false); // STOP ON EXCEPTION (if queue blocked)
+      toggleLogoAnimation(false);
       this.processNext();
       Logger.log({ type: 'error', message: `Process Exception: ${job.name}`, details: e.toString() });
     }
@@ -759,7 +790,6 @@ const processManager = {
         if (this.history.length > 0) {
           clearBtn.classList.remove('hidden');
           clearBtn.textContent = 'Clear History';
-          clearBtn.onclick = () => this.clearHistory();
         } else {
           clearBtn.classList.add('hidden');
         }
@@ -781,7 +811,7 @@ const processManager = {
           </div>
           <div class="flex justify-between items-center mt-1">
              <div class="text-xs text-gray-500">${job.info || 'Archived'}</div>
-             <button onclick="window.processManager.viewLogs('${job.id}')" class="text-xs text-purple-400 hover:text-purple-300 underline">View Logs</button>
+             <button data-action="view-logs" data-id="${job.id}" class="text-xs text-purple-400 hover:text-purple-300 underline">View Logs</button>
           </div>
         </div>
       `).join('');
@@ -794,7 +824,6 @@ const processManager = {
       if (hasCompleted) {
         clearBtn.classList.remove('hidden');
         clearBtn.textContent = 'Clear Completed';
-        clearBtn.onclick = () => this.clearCompleted();
       } else {
         clearBtn.classList.add('hidden');
       }
@@ -817,9 +846,9 @@ const processManager = {
              <div class="status-badge ${this.getStatusClass(job.status)}">${job.status}</div>
              
              ${(job.status === 'failed' || job.status === 'cancelled') ?
-          `<button class="text-gray-400 hover:text-purple-400 px-1 text-lg" onclick="window.processManager.retryJob('${job.id}')" title="Retry">⟳</button>` : ''}
+          `<button class="text-gray-400 hover:text-purple-400 px-1 text-lg" data-action="retry" data-id="${job.id}" title="Retry">⟳</button>` : ''}
                
-             <button class="text-gray-400 hover:text-red-400 px-2 text-lg font-bold" onclick="window.processManager.cancelJob('${job.id}')" title="Remove/Cancel">×</button>
+             <button class="text-gray-400 hover:text-red-400 px-2 text-lg font-bold" data-action="cancel" data-id="${job.id}" title="Remove/Cancel">×</button>
           </div>
         </div>
         ${['processing', 'pending', 'cancelled', 'done'].includes(job.status) && job.progress > 0 ? `
@@ -829,7 +858,7 @@ const processManager = {
         <div class="flex justify-between text-xs text-gray-500 mt-1">
             <span>${job.info}</span>
             <div class="flex gap-3">
-               <button onclick="window.processManager.viewLogs('${job.id}')" class="text-xs text-purple-400 hover:text-purple-300 underline">Logs</button>
+               <button data-action="view-logs" data-id="${job.id}" class="text-xs text-purple-400 hover:text-purple-300 underline">Logs</button>
                ${job.progress > 0 ? `<span>${Math.round(job.progress)}%</span>` : ''}
             </div>
         </div>
@@ -2190,51 +2219,53 @@ function initSettingsUI() {
   // 3. Notification Checkbox
   const notifCheck = document.getElementById('setting-notifications');
   if (notifCheck) {
-    notifCheck.onchange = (e) => {
+    notifCheck.addEventListener('change', (e) => {
       appSettings.notifications = e.target.checked;
       saveSettings();
-    };
+    });
   }
 
   // 4. Set Output Directory
   const btnSetDir = document.getElementById('btn-set-output-dir');
   if (btnSetDir) {
-    btnSetDir.onclick = async () => {
-      try {
-        console.log("Opening directory dialog...");
-        const selected = await open({
-          directory: true,
-          multiple: false,
-          title: "Select Default Export Folder"
-        });
-        if (selected) {
-          appSettings.outputDir = selected;
-          saveSettings();
-          applySettings();
+    if (btnSetDir) {
+      btnSetDir.addEventListener('click', async () => {
+        try {
+          console.log("Opening directory dialog...");
+          const selected = await open({
+            directory: true,
+            multiple: false,
+            title: "Select Default Export Folder"
+          });
+          if (selected) {
+            appSettings.outputDir = selected;
+            saveSettings();
+            applySettings();
+          }
+        } catch (e) {
+          console.error("Failed to select directory", e);
+          // Fallback or user info
         }
-      } catch (e) {
-        console.error("Failed to select directory", e);
-        // Fallback or user info
-      }
-    };
+      });
+    }
   }
 
   // 5. Logs Logic
   const btnRefreshLogs = document.getElementById('btn-refresh-logs');
   if (btnRefreshLogs) {
-    btnRefreshLogs.onclick = () => {
+    btnRefreshLogs.addEventListener('click', () => {
       Logger.init();
       Logger.render();
-    };
+    });
   }
 
   const btnClearLogs = document.getElementById('btn-clear-logs');
   if (btnClearLogs) {
-    btnClearLogs.onclick = () => {
+    btnClearLogs.addEventListener('click', () => {
       if (confirm('Clear all application logs?')) {
         Logger.clear();
       }
-    };
+    });
   }
 
   // Initial Render of Logs
@@ -2442,5 +2473,21 @@ function initScrollAnimations() {
 
 document.addEventListener('DOMContentLoaded', () => {
   presetManager.init();
+  if (window.processManager) window.processManager.init();
   initScrollAnimations();
+
+  // --- Window Controls ---
+  const appWindow = getCurrentWindow();
+  document.getElementById('titlebar-minimize')?.addEventListener('click', () => {
+    console.log('Minimize clicked');
+    appWindow.minimize().catch(e => console.error('Minimize error:', e));
+  });
+  document.getElementById('titlebar-maximize')?.addEventListener('click', () => {
+    console.log('Maximize clicked');
+    appWindow.toggleMaximize().catch(e => console.error('Maximize error:', e));
+  });
+  document.getElementById('titlebar-close')?.addEventListener('click', () => {
+    console.log('Close clicked');
+    appWindow.close().catch(e => console.error('Close error:', e));
+  });
 });

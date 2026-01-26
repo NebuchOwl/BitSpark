@@ -1,0 +1,26 @@
+<svg width="164" height="314" viewBox="0 0 164 314" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradSidebar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1b4b;stop-opacity:1" /> <!-- darker purple/blue -->
+      <stop offset="100%" style="stop-color:#4c1d95;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="164" height="314" fill="url(#gradSidebar)" />
+  
+  <!-- Large Centered Lightning Bolt -->
+  <g transform="translate(18, 85) scale(1.5)">
+      <path d="M45 40V12L15 56H40V84L70 40H45Z" fill="none" stroke="url(#boltGrad)" stroke-width="4" stroke-linejoin="round" />
+      <!-- Fill with gradient -->
+      <path d="M45 40V12L15 56H40V84L70 40H45Z" fill="url(#boltGrad)" fill-opacity="0.2" />
+  </g>
+
+  <!-- Bottom Branding -->
+  <text x="82" y="280" font-family="Arial, sans-serif" font-weight="bold" font-size="14" fill="white" text-anchor="middle">Video Optimizer</text>
+  
+  <defs>
+    <linearGradient id="boltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a855f7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>
