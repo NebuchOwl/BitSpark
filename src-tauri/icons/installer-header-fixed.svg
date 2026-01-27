@@ -1,0 +1,19 @@
+<svg width="150" height="57" viewBox="0 0 150 57" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradHeader" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#9333ea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="150" height="57" fill="url(#gradHeader)" />
+  
+  <!-- Icon (Lightning Bolt) - Scaled and positioned left -->
+  <g transform="translate(10, 8) scale(0.8)">
+      <path d="M40 10V4L25 24H35V34L50 14H40Z" fill="white" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Title Text - Two lines to fit 150px width clearly -->
+  <text x="55" y="24" font-family="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" font-weight="bold" font-size="14" fill="white">Video</text>
+  <text x="55" y="42" font-family="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" font-weight="bold" font-size="14" fill="white">Optimizer</text>
+</svg>

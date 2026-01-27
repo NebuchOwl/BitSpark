@@ -39,8 +39,8 @@
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico",
         "displayLanguageSelector": true,
-        "headerImage": "icons/header.bmp",
-        "sidebarImage": "icons/sidebar.bmp"
+        "headerImage": "icons/installer-header.bmp",
+        "sidebarImage": "icons/installer-sidebar.bmp"
       }
     },
     "externalBin": [

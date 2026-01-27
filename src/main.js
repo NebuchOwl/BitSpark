@@ -1,12 +1,33 @@
 import './style.css';
 
-import { Command } from '@tauri-apps/plugin-shell';
+import { Command, open as openUrl } from '@tauri-apps/plugin-shell';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile, readFile } from '@tauri-apps/plugin-fs';
 import { tempDir, appCacheDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+
+// --- Global Error Handling (Production Debugging) ---
+window.addEventListener('error', (event) => {
+  const msg = event.message || 'Unknown Error';
+  const stack = event.error?.stack || 'No Stack';
+  // Logger might not be init yet, so safe check
+  if (window.processManager && window.Logger) {
+    window.Logger.log({ type: 'error', message: `Global Error: ${msg}`, details: stack });
+  }
+  // Fallback toast
+  if (window.showToast) window.showToast(`Critical: ${msg}`, 'error');
+  console.error('[Global Error]', msg);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  const msg = event.reason?.message || String(event.reason);
+  if (window.processManager && window.Logger) {
+    window.Logger.log({ type: 'error', message: `Promise Error: ${msg}`, details: 'Unhandled Rejection' });
+  }
+  console.error('[Unhandled Rejection]', msg);
+});
 
 
 const SUPPORTED_EXTENSIONS = [
@@ -35,10 +56,7 @@ window.showToast = function (message, type = 'info') {
   const toast = document.createElement('div');
 
   // Theme-aware, responsive, transparent styling
-  // bg-theme-secondary/90 ensures it adapts to light/dark themes while being transparent
-  // md:min-w-[300px] ensures it's not too small on desktop, but w-full on mobile
-  // border-l-4 provides the color indicator
-  const baseClasses = 'bg-gray-800/95 backdrop-blur-md shadow-xl p-4 rounded-r-lg border-l-4 flex items-center gap-3 transform transition-all duration-300 opacity-0 translate-x-10 pointer-events-auto z-50 mb-3 w-[90vw] max-w-sm md:w-auto md:min-w-[300px]';
+  const baseClasses = 'bg-gray-800/95 backdrop-blur-md shadow-xl p-4 rounded-r-lg border-l-4 flex items-center gap-3 transform transition-all duration-300 opacity-0 translate-x-10 pointer-events-auto z-50 mb-3 w-[90vw] md:w-auto md:max-w-sm';
 
   const typeConfig = {
     success: {
@@ -69,7 +87,7 @@ window.showToast = function (message, type = 'info') {
   iconDiv.innerHTML = config.icon;
 
   const msgDiv = document.createElement('div');
-  msgDiv.className = 'flex-1 font-medium whitespace-pre-wrap text-sm';
+  msgDiv.className = 'flex-1 font-medium text-sm break-all line-clamp-3';
   msgDiv.textContent = message;
 
   const closeBtn = document.createElement('button');
@@ -520,15 +538,23 @@ const processManager = {
         const btn = e.target.closest('button');
         if (!btn) return;
 
+        // Prevent default if it's a form submission (unlikely but safe)
+        e.preventDefault();
+        e.stopPropagation();
+
         const action = btn.dataset.action;
         const id = btn.dataset.id;
 
-        if (!action || !id) return;
+        Logger.log({ type: 'info', message: `UI Interaction: ${action} on ${id}` });
+
+        if (!action) return;
 
         if (action === 'view-logs') this.viewLogs(id);
         if (action === 'retry') this.retryJob(id);
         if (action === 'cancel') this.cancelJob(id);
       });
+    } else {
+      console.error("Queue List element not found during binding!");
     }
   },
 
@@ -728,6 +754,31 @@ const processManager = {
       showToast(`Spawning FFmpeg...`, 'info');
       const cmd = Command.sidecar(job.command, job.args);
 
+      // --- Robust Log Handling (Universal) ---
+      const handleLog = (line) => {
+        const text = (typeof line === 'string') ? line : new TextDecoder().decode(line || new Uint8Array());
+        job.logs.push(text);
+
+        // Real-time update
+        if (this.currentLogJobId === job.id) {
+          const el = document.getElementById('modal-logs-content');
+          if (el) {
+            el.textContent += text + '\n';
+            el.scrollTop = el.scrollHeight;
+          }
+        }
+      };
+
+      // Register listeners (Try both API styles to be safe)
+      cmd.on('stdout', handleLog);
+      cmd.on('stderr', handleLog);
+      if (cmd.stdout && typeof cmd.stdout.on === 'function') {
+        cmd.stdout.on('data', handleLog);
+      }
+      if (cmd.stderr && typeof cmd.stderr.on === 'function') {
+        cmd.stderr.on('data', handleLog);
+      }
+
       cmd.on('close', data => {
         if (job.status === 'cancelled') return;
         if (data.code === 0) {
@@ -753,12 +804,14 @@ const processManager = {
         if (job.status === 'cancelled') return;
         job.status = 'failed';
         job.info = 'Error';
-        showToast(`Spawn Error: ${JSON.stringify(err)}`, 'error');
+        const msg = JSON.stringify(err);
+        job.logs.push(`Spawn Error: ${msg}`);
+        showToast(`Spawn Error: ${msg}`, 'error');
         this.isProcessing = false;
         this.save();
         this.updateUI();
         this.processNext();
-        Logger.log({ type: 'error', message: `Execution Error: ${job.name}`, details: JSON.stringify(err) });
+        Logger.log({ type: 'error', message: `Execution Error: ${job.name}`, details: msg });
       });
 
       const child = await cmd.spawn();
@@ -2265,6 +2318,14 @@ function initSettingsUI() {
       if (confirm('Clear all application logs?')) {
         Logger.clear();
       }
+    });
+  }
+
+  // 6. About Links
+  const btnGithub = document.getElementById('btn-about-github');
+  if (btnGithub) {
+    btnGithub.addEventListener('click', () => {
+      openUrl('https://github.com/NebuchOwl/video-optimizer');
     });
   }
 
