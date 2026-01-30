@@ -248,6 +248,8 @@ body.theme-light .trim-mode-card p.text-gray-400 {
 .queue-progress-fill-static {
     animation: none;
     background-image: none;
+    background-color: #22c55e; /* Green-500 to match Success badge */
+    opacity: 0.8; /* Slightly subtle */
 }
 
 @keyframes progress-stripes {
@@ -273,4 +275,13 @@ body.theme-light .trim-mode-card p.text-gray-400 {
 
 .animate-spin-slow {
     animation: spin-slow 3s linear infinite;
+}
+
+/* Batch Option Buttons */
+.batch-opt-btn.active {
+    @apply ring-2 ring-purple-500 bg-gray-800 !important;
+}
+
+.batch-opt-btn.active div {
+    @apply text-white !important;
 }

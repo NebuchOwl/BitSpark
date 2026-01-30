@@ -78,6 +78,17 @@
         </button>
         <button
           class="nav-btn w-full text-left px-2 lg:px-4 py-3 rounded-xl flex items-center justify-center lg:justify-start space-x-0 lg:space-x-3 text-gray-400 hover-theme transition-all group"
+          data-target="view-batch" title="Batch">
+          <svg class="w-6 h-6 min-w-[1.5rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
+            </path>
+          </svg>
+          <span class="hidden lg:block truncate">Batch</span>
+        </button>
+
+        <button
+          class="nav-btn w-full text-left px-2 lg:px-4 py-3 rounded-xl flex items-center justify-center lg:justify-start space-x-0 lg:space-x-3 text-gray-400 hover-theme transition-all group"
           data-target="view-trimmer" title="Trimmer">
           <svg class="w-6 h-6 min-w-[1.5rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -101,7 +112,7 @@
           data-target="view-merger" title="Merger">
           <svg class="w-6 h-6 min-w-[1.5rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
+              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1">
             </path>
           </svg>
           <span class="hidden lg:block truncate">Merger</span>
@@ -149,7 +160,7 @@
       </nav>
 
       <div class="p-4 border-t border-gray-700 text-xs text-center text-gray-500 hidden lg:block">
-        v0.1.0 Beta
+        v0.3.0 Beta
       </div>
     </aside>
 
@@ -458,6 +469,256 @@
           <div class="text-sm text-gray-400 py-2">Move slider to compare quality</div>
         </div>
       </div>
+
+      <!-- View: Batch Processing -->
+      <section id="view-batch"
+        class="view-section hidden h-full w-full overflow-y-auto p-4 lg:p-8 flex-col items-center">
+        <div class="mb-4 lg:mb-8 space-y-2 text-center flex-none">
+          <h1 class="text-2xl lg:text-3xl font-bold text-white">Batch Processing</h1>
+          <p class="text-sm lg:text-base text-gray-400">Process queue of files with same settings</p>
+        </div>
+
+        <div class="flex flex-col lg:flex-row w-full max-w-[90rem] gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
+          <!-- Left: Files -->
+          <div class="flex-1 flex flex-col gap-4 lg:min-h-0 lg:h-full">
+            <!-- Dropzone (Compact) -->
+            <div id="batch-dropzone"
+              class="w-full h-32 border-2 border-dashed border-gray-700 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-purple-500 hover:bg-gray-700/50 transition-all group flex-none">
+              <input type="file" id="batch-file-input" class="hidden" accept="video/*" multiple />
+              <div class="pointer-events-none flex flex-col items-center">
+                <svg class="w-8 h-8 text-gray-500 group-hover:text-purple-400 mb-2" fill="none" stroke="currentColor"
+                  viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                <div class="text-xs text-gray-400">Add Files (Drag & Drop)</div>
+              </div>
+            </div>
+
+            <!-- File List -->
+            <div
+              class="flex-1 min-h-[20rem] lg:min-h-0 bg-gray-800 rounded-xl border border-gray-700 p-4 overflow-hidden flex flex-col">
+              <div class="flex justify-between items-center mb-4 flex-none">
+                <span class="text-sm font-bold text-gray-300">Files Queue</span>
+                <button id="batch-clear-btn" class="text-xs text-red-400 hover:text-white hover:underline hidden">Clear
+                  All</button>
+              </div>
+              <div id="batch-list" class="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-2">
+                <div class="h-full flex flex-col items-center justify-center text-gray-500 space-y-2 opacity-50">
+                  <span class="text-sm">Queue is empty</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Settings -->
+          <div
+            class="w-full lg:w-96 xl:w-[28rem] bg-gray-800 p-4 lg:p-6 rounded-2xl border border-gray-700 flex flex-col overflow-y-auto custom-scrollbar flex-none h-auto lg:h-full">
+            <h3 class="text-lg font-bold text-white mb-6 flex-none">Configuration</h3>
+
+            <!-- Mode Toggle -->
+            <div class="flex justify-center mb-6 bg-gray-900 p-1 rounded-lg w-full flex-none">
+              <button id="batch-mode-simple"
+                class="flex-1 px-4 py-2 rounded-md text-xs font-bold bg-gray-700 text-white shadow transition-all">Presets</button>
+              <button id="batch-mode-advanced"
+                class="flex-1 px-4 py-2 rounded-md text-xs font-bold text-gray-400 hover:text-white transition-all">Advanced</button>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2">
+              <!-- Simple Batch Settings -->
+              <div id="batch-panel-simple" class="space-y-4">
+                <div>
+                  <label class="block text-xs uppercase font-bold text-gray-500 mb-2">Preset</label>
+                  <div class="grid grid-cols-1 gap-2">
+                    <button
+                      class="batch-opt-btn active p-3 bg-gray-900 border border-gray-600 rounded-lg text-left hover:border-purple-500 transition-all text-white ring-1 ring-purple-500"
+                      data-q="medium">
+                      <div class="font-bold text-xs">High Quality</div>
+                    </button>
+                    <button
+                      class="batch-opt-btn p-3 bg-gray-900 border border-gray-600 rounded-lg text-left hover:border-purple-500 transition-all text-gray-400"
+                      data-q="low">
+                      <div class="font-bold text-xs">Balanced</div>
+                    </button>
+                    <button
+                      class="batch-opt-btn p-3 bg-gray-900 border border-gray-600 rounded-lg text-left hover:border-purple-500 transition-all text-gray-400"
+                      data-q="high">
+                      <div class="font-bold text-xs">Max Compression</div>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div>
+                    <label class="block text-xs uppercase font-bold text-gray-500 mb-2">Processing Unit</label>
+                    <select id="batch-unit-simple"
+                      class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:ring-1 focus:ring-purple-500 outline-none">
+                      <option value="cpu" selected>CPU (Standard)</option>
+                      <option value="cpu-low">CPU (Low Usage)</option>
+                      <option value="nvidia">NVIDIA GPU</option>
+                      <option value="amd">AMD GPU</option>
+                      <option value="intel">Intel GPU</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs uppercase font-bold text-gray-500 mb-2">Format</label>
+                    <select id="batch-format-simple"
+                      class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:ring-1 focus:ring-purple-500 outline-none">
+                      <option value=".mp4" selected>MP4</option>
+                      <option value=".mkv">MKV</option>
+                      <option value=".webm">WebM</option>
+                      <option value=".mov">MOV</option>
+                    </select>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Advanced Batch Settings (Full Parity) -->
+              <div id="batch-panel-advanced-v2" class="hidden space-y-4">
+
+                <!-- User Presets Bar -->
+                <div
+                  class="flex flex-col md:flex-row justify-between items-center bg-gray-900/50 p-3 rounded-xl border border-gray-700/50 gap-3">
+                  <div class="flex items-center gap-3 w-full md:w-auto flex-1">
+                    <label class="text-xs font-bold text-purple-400 uppercase tracking-widest whitespace-nowrap">Load
+                      Preset:</label>
+                    <select id="batch-user-preset-select"
+                      class="bg-gray-900 border border-gray-600 text-sm text-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 w-full outline-none py-1.5 px-3">
+                      <option value="">-- Current Settings --</option>
+                    </select>
+                  </div>
+                  <div class="flex gap-2 w-full md:w-auto justify-end">
+                    <button id="batch-btn-save-preset"
+                      class="text-xs bg-gray-700 border border-gray-600 hover:bg-purple-600 hover:border-purple-500 text-white px-4 py-1.5 rounded-lg transition-all shadow-sm font-medium">Save
+                      New</button>
+                    <button id="batch-btn-del-preset"
+                      class="text-xs bg-gray-700 border border-gray-600 hover:bg-red-600 hover:border-red-500 text-white px-3 py-1.5 rounded-lg transition-all shadow-sm font-medium hidden">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                        </path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Processing Unit -->
+                <div>
+                  <label class="block text-gray-400 text-xs uppercase font-bold mb-2">Processing Unit</label>
+                  <select id="batch-adv-backend"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 text-white">
+                    <option value="cpu" selected>Software (Standard)</option>
+                    <option value="cpu-low">Software (Low Usage)</option>
+                    <option value="nvidia">NVIDIA GPU (NVENC)</option>
+                    <option value="amd">AMD GPU (AMF)</option>
+                    <option value="intel">Intel GPU (QSV)</option>
+                  </select>
+                </div>
+
+                <!-- Codec -->
+                <div>
+                  <label class="block text-gray-400 text-xs uppercase font-bold mb-2">Codec</label>
+                  <select id="batch-adv-codec"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+                    <!-- Populated via JS -->
+                  </select>
+                </div>
+
+                <!-- Preset -->
+                <div>
+                  <label class="block text-gray-400 text-xs uppercase font-bold mb-2">Preset</label>
+                  <select id="batch-adv-preset"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+                    <option value="ultrafast">Ultrafast</option>
+                    <option value="superfast">Superfast</option>
+                    <option value="veryfast">Veryfast</option>
+                    <option value="faster">Faster</option>
+                    <option value="fast">Fast</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="slow">Slow</option>
+                    <option value="slower">Slower</option>
+                  </select>
+                </div>
+
+                <!-- CRF -->
+                <div>
+                  <div class="flex justify-between mb-2">
+                    <label class="text-gray-400 text-xs uppercase font-bold">Quality (CRF)</label>
+                    <span id="batch-adv-crf-val" class="text-purple-400 font-mono text-xs">23</span>
+                  </div>
+                  <input type="range" id="batch-adv-crf" min="0" max="51" value="23" step="1"
+                    class="w-full accent-purple-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <!-- Resolution -->
+                <div>
+                  <label class="block text-gray-400 text-xs uppercase font-bold mb-2">Resolution</label>
+                  <select id="batch-adv-resolution"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white">
+                    <option value="original" selected>Original</option>
+                    <option value="3840:-2">4K</option>
+                    <option value="2560:-2">2K</option>
+                    <option value="1920:-2">1080p</option>
+                    <option value="1280:-2">720p</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                  <div id="batch-adv-res-custom" class="hidden dynamic-flex space-x-2 mt-2">
+                    <input type="number" id="batch-adv-res-w" placeholder="W"
+                      class="w-1/2 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white outline-none">
+                    <input type="number" id="batch-adv-res-h" placeholder="H"
+                      class="w-1/2 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white outline-none">
+                  </div>
+                </div>
+
+                <!-- FPS -->
+                <div>
+                  <label class="block text-gray-400 text-xs uppercase font-bold mb-2">Frame Rate</label>
+                  <div class="flex space-x-2">
+                    <select id="batch-adv-fps"
+                      class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white">
+                      <option value="original" selected>Original</option>
+                      <option value="30">30 FPS</option>
+                      <option value="60">60 FPS</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                    <input type="number" id="batch-adv-fps-custom" placeholder="FPS"
+                      class="hidden w-24 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white outline-none">
+                  </div>
+                </div>
+
+                <!-- Audio -->
+                <div>
+                  <label class="block text-gray-400 text-xs uppercase font-bold mb-2">Audio</label>
+                  <select id="batch-adv-audio"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white">
+                    <option value="copy" selected>Copy</option>
+                    <option value="aac">AAC</option>
+                    <option value="libopus">Opus</option>
+                    <option value="mp3">MP3</option>
+                    <option value="none">No Audio</option>
+                  </select>
+                </div>
+
+                <!-- Custom -->
+                <div class="pt-2">
+                  <label class="block text-xs uppercase font-bold text-gray-500 mb-2">Custom Args</label>
+                  <textarea id="batch-adv-custom" rows="2"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-xs font-mono text-purple-300 focus:ring-1 focus:ring-purple-500 outline-none"
+                    placeholder="-vf hqdn3d"></textarea>
+                </div>
+              </div>
+
+              <!-- Start Button -->
+              <div class="pt-4 border-t border-gray-700 mt-4 flex-none">
+                <button id="batch-start-btn"
+                  class="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  Start Batch
+                </button>
+              </div>
+            </div>
+          </div>
+      </section>
 
       <!-- View: Trimmer -->
       <section id="view-trimmer" class="scroll-reveal view-section hidden h-full w-full p-4 lg:p-8 overflow-hidden">
@@ -1098,7 +1359,7 @@
                 <div class="flex items-center gap-3 mb-6">
                   <span
                     class="px-3 py-1 bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold rounded-full uppercase tracking-wider">Beta
-                    0.2.1</span>
+                    0.3.0</span>
                 </div>
 
                 <p class="text-gray-400 max-w-md mx-auto mb-8 leading-relaxed">
@@ -1170,7 +1431,7 @@
     </main>
     <!-- Log Viewer Modal -->
     <div id="modal-logs"
-      class="fixed inset-0 bg-black/80 hidden flex items-center justify-center z-50 backdrop-blur-sm">
+      class="fixed inset-0 bg-black/80 hidden dynamic-flex items-center justify-center z-50 backdrop-blur-sm">
       <div class="bg-gray-900 w-full max-w-4xl h-[80vh] rounded-xl border border-gray-700 flex flex-col shadow-2xl">
         <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-800/50 rounded-t-xl">
           <h3 class="text-xl font-bold text-white flex items-center gap-2">

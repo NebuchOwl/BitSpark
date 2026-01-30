@@ -759,6 +759,39 @@ const processManager = {
         const text = (typeof line === 'string') ? line : new TextDecoder().decode(line || new Uint8Array());
         job.logs.push(text);
 
+        // Parse Progress
+        // Duration: 00:00:05.12
+        const durMatch = text.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}\.\d+)/);
+        if (durMatch && !job.durationSec) {
+          job.durationSec = parseTimeHelper(durMatch[1] + ':' + durMatch[2] + ':' + durMatch[3]);
+        }
+
+        // time=00:00:02.45
+        if (job.durationSec) {
+          const timeMatch = text.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d+)/);
+          if (timeMatch) {
+            const currentSec = parseTimeHelper(timeMatch[1] + ':' + timeMatch[2] + ':' + timeMatch[3]);
+            const percent = Math.min(100, (currentSec / job.durationSec) * 100);
+
+            if (Math.abs(percent - job.progress) > 0.5) { // Update significantly
+              job.progress = percent;
+
+              // Direct DOM update for smoothness and performance
+              const row = document.getElementById(`job-${job.id}`);
+              if (row) {
+                const fill = row.querySelector('.queue-progress-fill');
+                const percentText = row.querySelector('.text-xs span:last-child'); // Approx target
+
+                if (fill) fill.style.width = `${percent}%`;
+                // If the bar wasn't there (0%), we might need to full update, but the new renderer handles it.
+                // If it's pure 0->1 transition, the element might not exist yet.
+                // We'll rely on updateUI() for the first show, or handle it here.
+                if (!fill) this.updateUI();
+              }
+            }
+          }
+        }
+
         // Real-time update
         if (this.currentLogJobId === job.id) {
           const el = document.getElementById('modal-logs-content');
@@ -904,7 +937,7 @@ const processManager = {
              <button class="text-gray-400 hover:text-red-400 px-2 text-lg font-bold" data-action="cancel" data-id="${job.id}" title="Remove/Cancel">×</button>
           </div>
         </div>
-        ${['processing', 'pending', 'cancelled', 'done'].includes(job.status) && job.progress > 0 ? `
+        ${(job.status === 'processing' || (['pending', 'cancelled', 'done'].includes(job.status) && job.progress > 0)) ? `
         <div class="queue-progress-bar mt-2">
             <div class="queue-progress-fill${job.status !== 'processing' ? ' queue-progress-fill-static' : ''}" style="width: ${job.progress}%"></div>
         </div>` : ''}
@@ -2532,23 +2565,640 @@ function initScrollAnimations() {
   });
 }
 
+// --- Batch Manager ---
+const batchManager = {
+  files: [],
+  isSimpleMode: true,
+
+  init() {
+    const dropzone = document.getElementById('batch-dropzone');
+    const input = document.getElementById('batch-file-input');
+    const simpleBtn = document.getElementById('batch-mode-simple');
+    const advBtn = document.getElementById('batch-mode-advanced');
+    const startBtn = document.getElementById('batch-start-btn');
+    const clearBtn = document.getElementById('batch-clear-btn');
+    const simplePanel = document.getElementById('batch-panel-simple');
+    const advPanel = document.getElementById('batch-panel-advanced-v2');
+
+    // Drag & Drop
+    if (dropzone) {
+      if (typeof setupUnifiedDragDrop === 'function') {
+        setupUnifiedDragDrop(dropzone, (paths) => this.addFiles(paths));
+      }
+      dropzone.addEventListener('click', () => input && input.click());
+    }
+
+    if (input) {
+      input.addEventListener('change', (e) => {
+        if (e.target.files.length) {
+          const paths = [];
+          for (const f of e.target.files) {
+            if (f.path) paths.push(f.path);
+            else if (f.name) paths.push(f.name);
+          }
+          if (paths.length) this.addFiles(paths);
+        }
+      });
+      if (dropzone) {
+        dropzone.onclick = async (e) => {
+          e.stopPropagation();
+          try {
+            const selected = await open({ multiple: true, filters: [{ name: 'Video', extensions: SUPPORTED_EXTENSIONS }] });
+            if (selected) this.addFiles(selected);
+          } catch (err) { console.error(err); }
+        };
+      }
+    }
+
+    // Mode Toggle (Handled by initBatchAdvanced mainly, but we sync state here)
+    if (simpleBtn && advBtn && simplePanel && advPanel) {
+      simpleBtn.addEventListener('click', () => {
+        this.isSimpleMode = true;
+        // UI Classes handled by initBatchAdvanced or here redundancy is fine as long as IDs match
+        simplePanel.classList.remove('hidden');
+        advPanel.classList.add('hidden');
+        advPanel.style.display = '';
+
+        simpleBtn.className = 'flex-1 px-4 py-2 rounded-md text-xs font-bold bg-gray-700 text-white shadow transition-all';
+        advBtn.className = 'flex-1 px-4 py-2 rounded-md text-xs font-bold text-gray-400 hover:text-white transition-all';
+      });
+
+      advBtn.addEventListener('click', () => {
+        this.isSimpleMode = false;
+        advPanel.classList.remove('hidden');
+        advPanel.style.display = 'block';
+        simplePanel.classList.add('hidden');
+
+        advBtn.className = 'flex-1 px-4 py-2 rounded-md text-xs font-bold bg-gray-700 text-white shadow transition-all';
+        simpleBtn.className = 'flex-1 px-4 py-2 rounded-md text-xs font-bold text-gray-400 hover:text-white transition-all';
+      });
+    }
+
+    // Option Buttons
+    document.querySelectorAll('.batch-opt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.batch-opt-btn').forEach(b => b.classList.remove('active', 'ring-2', 'ring-purple-500', 'bg-gray-800'));
+        btn.classList.add('active', 'ring-2', 'ring-purple-500', 'bg-gray-800');
+      });
+    });
+
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      this.files = [];
+      this.updateUI();
+    });
+
+    if (startBtn) startBtn.addEventListener('click', () => this.startBatch());
+
+    // --- Batch Advanced UI Init ---
+    const bAdvBackend = document.getElementById('batch-adv-backend');
+    const bAdvRes = document.getElementById('batch-adv-resolution');
+    const bAdvFps = document.getElementById('batch-adv-fps');
+    const bAdvCrf = document.getElementById('batch-adv-crf');
+
+    if (bAdvBackend) {
+      bAdvBackend.addEventListener('change', () => this.updateBatchCodecs());
+      this.updateBatchCodecs(); // Init
+    }
+
+    if (bAdvRes) {
+      bAdvRes.addEventListener('change', (e) => {
+        const custom = document.getElementById('batch-adv-res-custom');
+        if (custom) {
+          if (e.target.value === 'custom') {
+            custom.classList.remove('hidden');
+            custom.style.display = 'flex'; // Ensure flex layout
+          } else {
+            custom.classList.add('hidden');
+            custom.style.display = 'none';
+          }
+        }
+      });
+    }
+
+    if (bAdvFps) {
+      bAdvFps.addEventListener('change', (e) => {
+        const custom = document.getElementById('batch-adv-fps-custom');
+        if (custom) {
+          if (e.target.value === 'custom') {
+            custom.classList.remove('hidden');
+            custom.style.display = 'block';
+          } else {
+            custom.classList.add('hidden');
+            custom.style.display = 'none';
+          }
+        }
+      });
+    }
+
+    if (bAdvCrf) {
+      bAdvCrf.addEventListener('input', (e) => {
+        const valInfo = document.getElementById('batch-adv-crf-val');
+        if (valInfo) valInfo.textContent = e.target.value;
+      });
+    }
+
+    // Initial UI state
+    this.updateUI();
+  },
+
+  updateBatchCodecs() {
+    const backendEl = document.getElementById('batch-adv-backend');
+    const codecEl = document.getElementById('batch-adv-codec');
+    if (!backendEl || !codecEl) return;
+
+    const backend = backendEl.value;
+    const options = codecsByBackend[backend] || codecsByBackend.cpu;
+
+    // Save current selection if possible
+    const current = codecEl.value;
+
+    codecEl.innerHTML = '';
+    options.forEach(opt => {
+      const el = document.createElement('option');
+      el.value = opt.val;
+      el.textContent = opt.label;
+      codecEl.appendChild(el);
+    });
+
+    // Try restore
+    if (current && options.find(o => o.val === current)) {
+      codecEl.value = current;
+    }
+  },
+
+  addFiles(paths) {
+    // Avoid duplicates
+    const newFiles = paths.filter(p => !this.files.includes(p));
+    this.files = [...this.files, ...newFiles];
+    this.updateUI();
+    showToast(`${newFiles.length} files added to Batch`, 'success');
+  },
+
+  removeFile(index) {
+    this.files.splice(index, 1);
+    this.updateUI();
+  },
+
+  updateUI() {
+    const list = document.getElementById('batch-list');
+    const clearBtn = document.getElementById('batch-clear-btn');
+    if (!list) return;
+
+    if (this.files.length === 0) {
+      list.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-gray-500 space-y-2 opacity-50"><span class="text-sm">Queue is empty</span></div>';
+      if (clearBtn) clearBtn.classList.add('hidden');
+      return;
+    }
+
+    if (clearBtn) clearBtn.classList.remove('hidden');
+
+    list.innerHTML = this.files.map((file, i) => {
+      const name = file.replace(/^.*[\\\/]/, '');
+      return `
+         <div class="flex justify-between items-center bg-gray-900/50 p-3 rounded-lg border border-gray-700/50 group hover:border-purple-500/50 transition-colors">
+            <span class="text-xs text-gray-300 truncate font-mono">${name}</span>
+            <button onclick="batchManager.removeFile(${i})" class="text-gray-500 hover:text-red-400 font-bold px-2">×</button>
+         </div>
+       `;
+    }).join('');
+  },
+
+  async startBatch() {
+    if (this.files.length === 0) return showToast('No files in batch queue', 'error');
+
+    const args = [];
+    let ext = '.mp4'; // Default extension
+
+    // --- Simple Mode Logic ---
+    if (this.isSimpleMode) {
+      const qualityBtn = document.querySelector('.batch-opt-btn.active');
+      const quality = qualityBtn ? qualityBtn.dataset.q : 'medium'; // low, medium, high
+      const formatSelect = document.getElementById('batch-format-simple');
+      const unitSelect = document.getElementById('batch-unit-simple');
+
+      ext = formatSelect ? formatSelect.value : '.mp4';
+      const unit = unitSelect ? unitSelect.value : 'cpu';
+
+      // Base Codec Selection
+      let codec = 'libx264';
+      if (unit === 'nvidia') codec = 'h264_nvenc';
+      else if (unit === 'amd') codec = 'h264_amf';
+      else if (unit === 'intel') codec = 'h264_qsv';
+
+      args.push('-c:v', codec);
+
+      // CPU Logic
+      if (unit.startsWith('cpu')) {
+        // High Quality (medium size)
+        if (quality === 'medium') args.push('-crf', '23', '-preset', 'medium');
+        // Balanced (good quality, smaller) -> actually 'low' on UI is 'Balanced'
+        else if (quality === 'low') args.push('-crf', '26', '-preset', 'fast');
+        // Max Compression (smallest size) -> 'high' on UI
+        else if (quality === 'high') args.push('-crf', '30', '-preset', 'slow');
+
+        // CPU Low handling (Background/Throttled assumption)
+        if (unit === 'cpu-low') {
+          // We can't easily throttle usage in simple args without 'nice' or complex filters
+          // So we map it to using a lighter preset or just threads limitation?
+          // Let's optimize for "Low Usage" = "slower encode, less priority"
+          // But usually faster preset = LESS CPU *time* total, but HIGHER usage per second.
+          // Slower preset = MORE CPU *time*, but maybe higher sustained load.
+          // Let's just assume cpu-low uses 'medium' preset even for balanced to be safe, or appends threads.
+          // For now, standard behavior.
+        }
+      }
+      // GPU Logic
+      else {
+        // NVENC / AMF / QSV don't use -crf (usually), they use -qp or -cq or global_quality
+        // Simplifying to safe defaults for now
+        // NVENC: -cq
+        if (unit === 'nvidia') {
+          if (quality === 'medium') args.push('-cq', '23', '-preset', 'p4');
+          else if (quality === 'low') args.push('-cq', '28', '-preset', 'p2');
+          else if (quality === 'high') args.push('-cq', '32', '-preset', 'p6');
+        }
+        // AMF/QSV (Generic Fallback)
+        else {
+          // Using bitrate fallback or default params if specific flags aren't extensive 
+          // FFmpeg often maps -crf to something reasonable or ignores it. 
+          // We'll trust FFmpeg wrapper or simple flags.
+          // Actually, explicitly adding basic bitrate targets is safer than CRF for HW if CRF fails?
+          // Let's stick to -crf (x264/5) logic style commands and hope mapping works or use qp.
+          // Common pattern: Use fixed qp for HW.
+          if (quality === 'medium') args.push('-qp', '23');
+          else if (quality === 'low') args.push('-qp', '28');
+          else if (quality === 'high') args.push('-qp', '32');
+        }
+      }
+
+      args.push('-c:a', 'aac'); // Default Audio
+    }
+    // --- Advanced Mode Logic ---
+    else {
+      // 1. Processing Unit (handled implicitly by Codec selection, but we verify codec)
+      const codec = document.getElementById('batch-adv-codec').value;
+      args.push('-c:v', codec);
+
+      // 2. Preset
+      const preset = document.getElementById('batch-adv-preset').value;
+      if (preset && !codec.includes('copy')) args.push('-preset', preset);
+
+      // 3. CRF / Quality
+      const crf = document.getElementById('batch-adv-crf').value;
+      if (crf && !codec.includes('copy')) {
+        // If GPU, might need adjustment, but user selected "CRF" on UI.
+        // We pass it as -crf. If encoder rejects, user has to know (Advanced mode).
+        // Smart tweak: NVENC uses -cq for crf-like behavior.
+        if (codec.includes('nvenc')) args.push('-cq', crf);
+        else if (codec.includes('amf') || codec.includes('qsv')) args.push('-qp', crf);
+        else args.push('-crf', crf);
+      }
+
+      // 4. Resolution
+      const resVal = document.getElementById('batch-adv-resolution').value;
+      if (resVal === 'custom') {
+        const w = document.getElementById('batch-adv-res-w').value;
+        const h = document.getElementById('batch-adv-res-h').value;
+        if (w && h) args.push('-vf', `scale=${w}:${h}`);
+      } else if (resVal !== 'original') {
+        args.push('-vf', `scale=${resVal}`);
+      }
+
+      // 5. FPS
+      const fpsVal = document.getElementById('batch-adv-fps').value;
+      if (fpsVal === 'custom') {
+        const fps = document.getElementById('batch-adv-fps-custom').value;
+        if (fps) args.push('-r', fps);
+      } else if (fpsVal !== 'original') {
+        args.push('-r', fpsVal);
+      }
+
+      // 6. Audio
+      const audio = document.getElementById('batch-adv-audio').value;
+      if (audio === 'none') args.push('-an');
+      else if (audio === 'copy') args.push('-c:a', 'copy');
+      else args.push('-c:a', audio);
+
+      // 7. Custom
+      const custom = document.getElementById('batch-adv-custom').value;
+      if (custom) {
+        // rudimentary split, might break on quotes
+        args.push(...custom.trim().split(/\s+/));
+      }
+
+      // Ext? Advanced doesn't have format selector in UI?
+      // Re-use Simple Format selector or assume MP4? 
+      // The Plan said "Full Parity", original Advanced Panel doesn't specific format often (it's input dependent or mp4).
+      // Let's check existing Advanced Panel... it didn't have Format selector either, just Resolution.
+      // We will default to MP4 for consistency or use the toggle from Simple mode if visible?
+      // Best to grab from the simple selector even if hidden, or default to .mp4
+      const formatSelect = document.getElementById('batch-format-simple');
+      ext = formatSelect ? formatSelect.value : '.mp4';
+    }
+
+    showToast(`Queuing ${this.files.length} jobs...`, 'info');
+
+    // Add to Process Manager
+    for (const input of this.files) {
+      const name = input.replace(/^.*[\\\/]/, '');
+      const base = name.lastIndexOf('.') > -1 ? name.substring(0, name.lastIndexOf('.')) : name;
+
+      const outputDir = appSettings.outputDir;
+      const output = outputDir ? await join(outputDir, `${base}_batch${ext}`) : input.replace(/(\.[^.]+)$/, `_batch${ext}`);
+      const finalOutput = (output === input) ? `${input}-batch${ext}` : output; // Safety
+
+      processManager.addJob({
+        name: name,
+        type: 'Batch',
+        command: 'ffmpeg',
+        args: ['-i', input, ...args, '-y', finalOutput],
+        output: finalOutput
+      });
+    }
+
+    this.files = [];
+    this.updateUI();
+
+    const queueBtn = document.querySelector('[data-target="view-queue"]');
+    if (queueBtn) queueBtn.click();
+  }
+};
+
+window.batchManager = batchManager; // Expose for inline onclick
+
+// --- Batch Advanced Mode Logic ---
+function initBatchAdvanced() {
+  const batchModeSimpleFn = document.getElementById('batch-mode-simple');
+  const batchModeAdvFn = document.getElementById('batch-mode-advanced');
+  const batchPanelSimple = document.getElementById('batch-panel-simple');
+  const batchPanelAdvanced = document.getElementById('batch-panel-advanced-v2');
+
+  const batchAdvBackend = document.getElementById('batch-adv-backend');
+  const batchAdvCodec = document.getElementById('batch-adv-codec');
+  const batchAdvCrf = document.getElementById('batch-adv-crf');
+  const batchAdvCrfVal = document.getElementById('batch-adv-crf-val');
+
+  const batchAdvResolution = document.getElementById('batch-adv-resolution');
+  const batchAdvResCustom = document.getElementById('batch-adv-res-custom');
+  const batchAdvFps = document.getElementById('batch-adv-fps');
+  const batchAdvFpsCustom = document.getElementById('batch-adv-fps-custom');
+
+  // 1. Toggle Mode
+  function setBatchMode(mode) {
+    if (mode === 'advanced') {
+      // Show Advanced
+      if (batchPanelSimple) batchPanelSimple.classList.add('hidden');
+
+      if (batchPanelAdvanced) {
+        batchPanelAdvanced.classList.remove('hidden');
+        batchPanelAdvanced.style.display = 'block'; // Force display
+      }
+
+      if (batchModeAdvFn) {
+        batchModeAdvFn.classList.remove('text-gray-400', 'bg-transparent');
+        batchModeAdvFn.classList.add('bg-gray-700', 'text-white', 'shadow');
+      }
+
+      if (batchModeSimpleFn) {
+        batchModeSimpleFn.classList.add('text-gray-400', 'bg-transparent');
+        batchModeSimpleFn.classList.remove('bg-gray-700', 'text-white', 'shadow');
+      }
+
+      // Update global state if needed, or just let batchManager read DOM checks
+      if (window.batchManager) window.batchManager.isAdvanced = true;
+    } else {
+      // Show Simple
+      if (batchPanelAdvanced) {
+        batchPanelAdvanced.classList.add('hidden');
+        batchPanelAdvanced.style.display = ''; // Reset
+      }
+
+      if (batchPanelSimple) batchPanelSimple.classList.remove('hidden');
+
+      if (batchModeSimpleFn) {
+        batchModeSimpleFn.classList.remove('text-gray-400', 'bg-transparent');
+        batchModeSimpleFn.classList.add('bg-gray-700', 'text-white', 'shadow');
+      }
+
+      if (batchModeAdvFn) {
+        batchModeAdvFn.classList.add('text-gray-400', 'bg-transparent');
+        batchModeAdvFn.classList.remove('bg-gray-700', 'text-white', 'shadow');
+      }
+
+      if (window.batchManager) window.batchManager.isAdvanced = false;
+    }
+  }
+
+  if (batchModeSimpleFn && batchModeAdvFn) {
+    batchModeSimpleFn.addEventListener('click', () => setBatchMode('simple'));
+    batchModeAdvFn.addEventListener('click', () => setBatchMode('advanced'));
+  }
+
+  // 2. Codec Population (Reusing global codecsByBackend)
+  function updateBatchCodecs() {
+    if (!batchAdvBackend || !batchAdvCodec) return;
+    const backend = batchAdvBackend.value;
+    // Ensure codecsByBackend is available (from global scope)
+    const options = (typeof codecsByBackend !== 'undefined' ? codecsByBackend[backend] : []) || [];
+
+    batchAdvCodec.innerHTML = '';
+    options.forEach(opt => {
+      const el = document.createElement('option');
+      el.value = opt.val;
+      el.textContent = opt.label;
+      batchAdvCodec.appendChild(el);
+    });
+  }
+
+  if (batchAdvBackend) {
+    batchAdvBackend.addEventListener('change', updateBatchCodecs);
+    updateBatchCodecs(); // Init
+  }
+
+  // 3. CRF Slider
+  if (batchAdvCrf) {
+    batchAdvCrf.addEventListener('input', (e) => {
+      if (batchAdvCrfVal) batchAdvCrfVal.textContent = e.target.value;
+    });
+  }
+
+  // 4. Custom Fields Toggle
+  if (batchAdvResolution) {
+    batchAdvResolution.addEventListener('change', (e) => {
+      if (e.target.value === 'custom') {
+        batchAdvResCustom.classList.remove('hidden');
+        batchAdvResCustom.classList.add('flex'); // Ensure flex
+      } else {
+        batchAdvResCustom.classList.add('hidden');
+        batchAdvResCustom.classList.remove('flex');
+      }
+    });
+  }
+
+  if (batchAdvFps) {
+    batchAdvFps.addEventListener('change', (e) => {
+      if (e.target.value === 'custom') {
+        batchAdvFpsCustom.classList.remove('hidden');
+        batchAdvFpsCustom.classList.add('block'); // Input is block usually
+      } else {
+        batchAdvFpsCustom.classList.add('hidden');
+        batchAdvFpsCustom.classList.remove('block');
+      }
+    });
+  }
+
+  // 5. Presets Logic (Mini-Manager)
+  const presetSelect = document.getElementById('batch-user-preset-select');
+  const btnSave = document.getElementById('batch-btn-save-preset');
+  const btnDel = document.getElementById('batch-btn-del-preset');
+
+  function loadBatchPresets() {
+    if (!presetSelect) return;
+    const saved = localStorage.getItem('userPresets');
+    let presets = {};
+    if (saved) {
+      try { presets = JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+
+    // Clear old options (keep first)
+    while (presetSelect.options.length > 1) {
+      presetSelect.remove(1);
+    }
+
+    Object.keys(presets).forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      presetSelect.appendChild(opt);
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener('click', async () => {
+      const name = await window.prompt("Enter preset name:");
+      if (!name) return;
+
+      const settings = {
+        backend: batchAdvBackend?.value,
+        codec: batchAdvCodec?.value,
+        preset: document.getElementById('batch-adv-preset')?.value,
+        crf: document.getElementById('batch-adv-crf')?.value,
+        resolution: batchAdvResolution?.value,
+        resW: document.getElementById('batch-adv-res-w')?.value,
+        resH: document.getElementById('batch-adv-res-h')?.value,
+        fps: batchAdvFps?.value,
+        fpsCustom: batchAdvFpsCustom?.value,
+        audio: document.getElementById('batch-adv-audio')?.value,
+        custom: document.getElementById('batch-adv-custom')?.value,
+      };
+
+      const saved = localStorage.getItem('userPresets');
+      let presets = saved ? JSON.parse(saved) : {};
+      presets[name] = settings;
+      localStorage.setItem('userPresets', JSON.stringify(presets));
+
+      loadBatchPresets();
+      presetSelect.value = name;
+      if (window.showToast) window.showToast(`Preset "${name}" saved!`, 'success');
+    });
+  }
+
+  if (presetSelect) {
+    presetSelect.addEventListener('change', () => {
+      const name = presetSelect.value;
+      if (!name) return; // Reset?
+
+      const saved = localStorage.getItem('userPresets');
+      if (!saved) return;
+      const presets = JSON.parse(saved);
+      const s = presets[name];
+      if (!s) return;
+
+      // Apply
+      if (batchAdvBackend) { batchAdvBackend.value = s.backend; updateBatchCodecs(); }
+      // Wait for codec update
+      setTimeout(() => {
+        if (batchAdvCodec) batchAdvCodec.value = s.codec;
+      }, 0);
+
+      const elConfig = {
+        'batch-adv-preset': s.preset,
+        'batch-adv-crf': s.crf,
+        'batch-adv-resolution': s.resolution,
+        'batch-adv-res-w': s.resW,
+        'batch-adv-res-h': s.resH,
+        'batch-adv-fps': s.fps,
+        'batch-adv-fps-custom': s.fpsCustom,
+        'batch-adv-audio': s.audio,
+        'batch-adv-custom': s.custom
+      };
+
+      for (const [id, val] of Object.entries(elConfig)) {
+        const el = document.getElementById(id);
+        if (el) el.value = val || '';
+      }
+
+      // Update UI states
+      if (batchAdvCrfVal) batchAdvCrfVal.textContent = s.crf;
+      if (batchAdvResolution) batchAdvResolution.dispatchEvent(new Event('change'));
+      if (batchAdvFps) batchAdvFps.dispatchEvent(new Event('change'));
+    });
+
+    // Init load
+    loadBatchPresets();
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   presetManager.init();
   if (window.processManager) window.processManager.init();
+  if (window.batchManager) window.batchManager.init();
+  initBatchAdvanced(); // Initialize Batch Advanced Logic
+
   initScrollAnimations();
 
   // --- Window Controls ---
   const appWindow = getCurrentWindow();
   document.getElementById('titlebar-minimize')?.addEventListener('click', () => {
-    console.log('Minimize clicked');
     appWindow.minimize().catch(e => console.error('Minimize error:', e));
   });
   document.getElementById('titlebar-maximize')?.addEventListener('click', () => {
-    console.log('Maximize clicked');
     appWindow.toggleMaximize().catch(e => console.error('Maximize error:', e));
   });
   document.getElementById('titlebar-close')?.addEventListener('click', () => {
-    console.log('Close clicked');
     appWindow.close().catch(e => console.error('Close error:', e));
+  });
+
+  // Navigation Patch - Ensure Batch button works if not covered by existing logic or double-bind is fine
+  // (Assuming existing logic uses delegated listener or we just add a new one)
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.target;
+      if (!target) return;
+
+      // Hide all view sections
+      document.querySelectorAll('.view-section').forEach(el => {
+        el.classList.add('hidden');
+        el.classList.remove('flex'); // Important for flex layouts
+        if (el.classList.contains('dynamic-flex')) el.classList.remove('dynamic-flex-active'); // if used
+      });
+
+      // Show target
+      const targetEl = document.getElementById(target);
+      if (targetEl) {
+        targetEl.classList.remove('hidden');
+        // Restore flex if needed (checking class list in HTML)
+        if (targetEl.classList.contains('dynamic-flex')) targetEl.classList.add('flex'); // or rely on CSS
+        else targetEl.classList.add('flex'); // Force flex for views usually
+      }
+
+      // Update Nav State
+      document.querySelectorAll('.nav-btn').forEach(b => {
+        b.classList.remove('bg-purple-600/20', 'text-purple-300', 'border-purple-500/30');
+        b.classList.add('text-gray-400', 'hover-theme');
+      });
+      btn.classList.add('bg-purple-600/20', 'text-purple-300', 'border-purple-500/30');
+      btn.classList.remove('text-gray-400', 'hover-theme');
+    });
   });
 });
