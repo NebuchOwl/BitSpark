@@ -19,7 +19,7 @@
 *   **Normalization**: Fix audio levels automatically.
 ### 🎨 Modern UI
 *   **Theming**: Switch between **Cosmic**, **Light**, **Midnight**, and **Sunset** themes.
-*   **Respnsive**: Adaptive layout that works on various screen sizes.
+*   **Responsive**: Adaptive layout that works on various screen sizes.
 ---
 ## 🛠️ Tech Stack
 *   **Core**: [Rust](https://www.rust-lang.org/) (Tauri v2)
