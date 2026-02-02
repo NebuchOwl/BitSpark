@@ -1,10 +1,10 @@
 # Video Optimizer
-![CI](https://github.com/NebuchOwl/video-optimizer/actions/workflows/ci.yml/badge.svg)
-![CI](https://github.com/NebuchOwl/video-optimizer/actions/workflows/release.yml/badge.svg)
-![License](https://img.shields.io/github/license/NebuchOwl/video-optimizer?style=for-the-badge&color=blue)
-![Version](https://img.shields.io/github/v/release/NebuchOwl/video-optimizer?style=for-the-badge&color=orange)
-![Downloads](https://img.shields.io/github/downloads/NebuchOwl/video-optimizer/total?style=for-the-badge&color=green)
-![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=for-the-badge)
+[![CI](https://github.com/NebuchOwl/video-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/NebuchOwl/video-optimizer/actions/workflows/ci.yml)
+[![Release](https://github.com/NebuchOwl/video-optimizer/actions/workflows/release.yml/badge.svg)](https://github.com/NebuchOwl/video-optimizer/actions/workflows/release.yml)
+[![License](https://img.shields.io/badge/License-Custom-blue.svg)](LICENSE.txt)
+[![Latest Release](https://img.shields.io/github/v/release/NebuchOwl/video-optimizer?include_prereleases&style=flat-square)](https://github.com/NebuchOwl/video-optimizer/releases)
+[![Downloads](https://img.shields.io/github/downloads/NebuchOwl/video-optimizer/total?style=flat-square&color=blue)](https://github.com/NebuchOwl/video-optimizer/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](https://github.com/NebuchOwl/video-optimizer)
 **Video Optimizer** is a high-performance media toolkit built with **Tauri v2**, **Rust**, and **FFmpeg**. Designed for speed and simplicity, it allows you to compress, convert, trim, and analyze video files through a stunning, modern interface.
 ![Screenshot Placeholder](https://via.placeholder.com/800x450.png?text=Application+Screenshot)
 ---
