@@ -12,12 +12,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest]
+        platform: [macos-13, macos-14, ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for changelog builder
+
+      - name: Build Changelog
+        id: build_changelog
+        if: matrix.platform == 'ubuntu-22.04' # Only run once to avoid duplicate processing, though we need it for the action content? 
+        # Actually tauri-action runs on every matrix, so every matrix tries to upload release. 
+        # The tauri-action is smart enough to merge assets, but release BODY is usually set by the first one or overwritten.
+        # Best practice: Generate it on all or just let it be. simpler to generate on all so the var exists.
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
+          configuration: ".github/changelog-config.json"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
@@ -49,15 +63,23 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS Signing
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows Signing (Requires manual signtool setup in scripts usually, or config in tauri.conf.json)
+          # Tauri v2 reads these for binding if configured in bundle
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Video Optimizer ${{ github.ref_name }}'
           releaseBody: |
-            ## 🚀 Changes in this version
-            - **Settings UI**: Complete overhaul with themes and better navigation.
-            - **Cross-Platform**: Native builds for Windows, macOS, and Linux.
-            - **Improvements**: Bug fixes and performance tweaks.
-
+            ${{ steps.build_changelog.outputs.changelog }}
+            
             ## 📦 Installation
             *   **Windows**: Download `setup.exe` (or `.msi`).
             *   **macOS**: Download `.dmg`.

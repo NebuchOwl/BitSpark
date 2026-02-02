@@ -7,6 +7,7 @@ import { tempDir, appCacheDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getOptimizerArgs, codecsByBackend } from './utils/optimizer-logic.js';
 
 // --- Global Error Handling (Production Debugging) ---
 window.addEventListener('error', (event) => {
@@ -233,9 +234,15 @@ function setupUnifiedDragDrop(element, onFilesDropped) {
         else if (f.name) paths.push(f.name); // Fallback (may not have full path)
       }
 
-      if (paths.length > 0 && paths[0].includes('/') || paths[0].includes('\\')) {
-        // We have valid paths, use them
-        onFilesDropped(paths);
+      if (paths.length > 0) {
+        // Enforce valid absolute paths (must contain separators)
+        const validPaths = paths.filter(p => p && (p.includes('/') || p.includes('\\')));
+
+        if (validPaths.length > 0) {
+          onFilesDropped(validPaths);
+        } else {
+          console.warn('[DragDrop] Dropped files do not have valid absolute paths. Browser limitations?');
+        }
       }
       // Otherwise, Tauri native event will handle it
     }
@@ -371,43 +378,8 @@ const advFpsCustom = document.getElementById('adv-fps-custom');
 const advBackend = document.getElementById('adv-backend');
 
 // --- Dynamic Codec Logic ---
-const codecsByBackend = {
-  cpu: [
-    { val: 'libx264', label: 'H.264 (Standard)' },
-    { val: 'libx265', label: 'H.265 (HEVC)' },
-    { val: 'libaom-av1', label: 'AV1 (Next Gen)' },
-    { val: 'libvpx-vp9', label: 'VP9 (Web)' },
-    { val: 'prores_ks', label: 'ProRes (Editing)' },
-    { val: 'copy', label: 'Copy (No Re-encode)' }
-  ],
-  'cpu-low': [
-    { val: 'libx264', label: 'H.264 (Standard)' },
-    { val: 'libx265', label: 'H.265 (HEVC)' },
-    { val: 'libaom-av1', label: 'AV1 (Next Gen)' },
-    { val: 'libvpx-vp9', label: 'VP9 (Web)' },
-    { val: 'prores_ks', label: 'ProRes (Editing)' },
-    { val: 'copy', label: 'Copy (No Re-encode)' }
-  ],
-  nvidia: [
-    { val: 'h264_nvenc', label: 'H.264 (NVIDIA GPU)' },
-    { val: 'hevc_nvenc', label: 'H.265 (NVIDIA GPU)' },
-    { val: 'av1_nvenc', label: 'AV1 (NVIDIA RTX 40+)' },
-    { val: 'copy', label: 'Copy (No Re-encode)' }
-  ],
-  amd: [
-    { val: 'h264_amf', label: 'H.264 (AMD GPU)' },
-    { val: 'hevc_amf', label: 'H.265 (AMD GPU)' },
-    { val: 'av1_amf', label: 'AV1 (AMD RDNA3+)' },
-    { val: 'copy', label: 'Copy (No Re-encode)' }
-  ],
-  intel: [
-    { val: 'h264_qsv', label: 'H.264 (Intel GPU)' },
-    { val: 'hevc_qsv', label: 'H.265 (Intel GPU)' },
-    { val: 'vp9_qsv', label: 'VP9 (Intel GPU)' },
-    { val: 'av1_qsv', label: 'AV1 (Intel Arc)' },
-    { val: 'copy', label: 'Copy (No Re-encode)' }
-  ]
-};
+// --- Dynamic Codec Logic ---
+// Imported from ./utils/optimizer-logic.js
 
 function updateAdvCodecs() {
   if (!advBackend || !advCodec) return;
@@ -1059,6 +1031,15 @@ if (defaultBtn) {
 optimizeBtn.addEventListener('click', async () => {
   if (!selectedFiles || selectedFiles.length === 0) return showToast('No files selected', 'error');
 
+  // Validate file paths before processing
+  const validFiles = selectedFiles.filter(f => f && (f.includes('/') || f.includes('\\')));
+
+  if (validFiles.length === 0) return showToast('Invalid file paths selected. Please re-select files.', 'error');
+  if (validFiles.length < selectedFiles.length) {
+    showToast(`${selectedFiles.length - validFiles.length} invalid files skipped.`, 'info');
+    selectedFiles = validFiles;
+  }
+
   const isBatch = selectedFiles.length > 1;
   let outputDir = null;
 
@@ -1072,7 +1053,24 @@ optimizeBtn.addEventListener('click', async () => {
   }
 
   // Capture settings once
-  const baseArgs = getOptimizerArgs();
+  // Capture settings once
+  const config = {
+    isAdvancedMode,
+    advCodec: advCodec ? advCodec.value : '',
+    advCrf: advCrf ? advCrf.value : '',
+    advPreset: advPreset ? advPreset.value : '',
+    advBackend: advBackend ? advBackend.value : '',
+    advResolution: advResolution ? advResolution.value : '',
+    advResW: advResW ? advResW.value : '',
+    advResH: advResH ? advResH.value : '',
+    advFps: advFps ? advFps.value : '',
+    advFpsCustom: advFpsCustom ? advFpsCustom.value : '',
+    advAudio: advAudio ? advAudio.value : '',
+    advCustom: advCustom ? advCustom.value : '',
+    currentQuality,
+    encoderMode: document.getElementById('encoder-select') ? document.getElementById('encoder-select').value : ''
+  };
+  const baseArgs = getOptimizerArgs(config);
 
   // Determine extension
   let defaultExt = '.mp4';
@@ -1125,93 +1123,7 @@ optimizeBtn.addEventListener('click', async () => {
   showToast(`${isBatch ? 'Files' : 'File'} added to Queue`, 'success');
 });
 
-function getOptimizerArgs() {
-  const args = [];
-  if (isAdvancedMode) {
-    const codec = advCodec.value;
-    if (codec !== 'copy') {
-      args.push('-c:v', codec);
-
-      // Hardware specific flags
-      if (codec.includes('nvenc')) {
-        args.push('-cq', advCrf.value);
-        let pVal = 'p4'; // Default Medium
-        if (advPreset.value.includes('fast')) pVal = 'p2';
-        if (advPreset.value.includes('slow')) pVal = 'p6';
-        args.push('-preset', pVal);
-      } else if (codec.includes('amf')) {
-        args.push('-rc', 'cqp');
-        args.push('-qp-i', advCrf.value);
-        args.push('-qp-p', advCrf.value);
-        let qVal = 'balanced';
-        if (advPreset.value.includes('fast')) qVal = 'speed';
-        if (advPreset.value.includes('slow')) qVal = 'quality';
-        args.push('-quality', qVal);
-      } else if (codec.includes('qsv')) {
-        args.push('-global_quality', advCrf.value);
-        args.push('-preset', advPreset.value);
-      } else if (codec === 'prores_ks') {
-        args.push('-profile:v', '3');
-        args.push('-pix_fmt', 'yuv422p10le');
-      } else {
-        // CPU
-        args.push('-crf', advCrf.value);
-        if (advBackend.value === 'cpu-low') {
-          args.push('-threads', '2');
-        }
-        if (!codec.includes('libvpx')) {
-          args.push('-preset', advPreset.value);
-        } else {
-          args.push('-b:v', '0');
-        }
-      }
-    } else {
-      args.push('-c:v', 'copy');
-    }
-
-    // Resolution
-    if (advResolution.value === 'custom') {
-      const w = advResW.value || -1;
-      const h = advResH.value || -1;
-      if (w != -1 || h != -1) args.push('-vf', `scale=${w}:${h}`);
-    } else if (advResolution.value !== 'original') {
-      args.push('-vf', `scale=${advResolution.value}`);
-    }
-    // FPS
-    if (advFps.value === 'custom') {
-      if (advFpsCustom.value) args.push('-r', advFpsCustom.value);
-    } else if (advFps.value !== 'original') {
-      args.push('-r', advFps.value);
-    }
-    // Audio
-    if (advAudio.value === 'none') {
-      args.push('-an');
-    } else if (advAudio.value !== 'copy') {
-      args.push('-c:a', advAudio.value);
-    } else {
-      args.push('-c:a', 'copy');
-    }
-    // Custom
-    if (advCustom.value.trim()) {
-      args.push(...advCustom.value.trim().split(/\s+/));
-    }
-
-  } else {
-    // Simple Mode
-    let crf = '23';
-    if (currentQuality === 'medium') crf = '18';
-    if (currentQuality === 'high') crf = '28';
-    const encoderMode = document.getElementById('encoder-select').value;
-    switch (encoderMode) {
-      case 'gpu-nvidia': args.push('-c:v', 'h264_nvenc', '-cq', crf, '-preset', 'p4'); break;
-      case 'gpu-amd': args.push('-c:v', 'h264_amf', '-rc', 'cqp', '-qp-i', crf, '-qp-p', crf); break;
-      case 'gpu-intel': args.push('-c:v', 'h264_qsv', '-global_quality', crf); break;
-      case 'cpu-low': args.push('-vcodec', 'libx264', '-crf', crf, '-preset', 'medium', '-threads', '2'); break;
-      default: args.push('-vcodec', 'libx264', '-crf', crf, '-preset', 'fast'); break;
-    }
-  }
-  return args;
-}
+// getOptimizerArgs moved to utils logic
 
 // Navigation Logic
 const navBtns = document.querySelectorAll('.nav-btn');
@@ -2585,7 +2497,15 @@ const batchManager = {
       if (typeof setupUnifiedDragDrop === 'function') {
         setupUnifiedDragDrop(dropzone, (paths) => this.addFiles(paths));
       }
-      dropzone.addEventListener('click', () => input && input.click());
+
+      // Use Tauri Native Dialog exclusively for click (Fixes multiple dialogs issue)
+      dropzone.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          const selected = await open({ multiple: true, filters: [{ name: 'Video', extensions: SUPPORTED_EXTENSIONS }] });
+          if (selected) this.addFiles(selected);
+        } catch (err) { console.error(err); }
+      });
     }
 
     if (input) {
@@ -2599,15 +2519,8 @@ const batchManager = {
           if (paths.length) this.addFiles(paths);
         }
       });
-      if (dropzone) {
-        dropzone.onclick = async (e) => {
-          e.stopPropagation();
-          try {
-            const selected = await open({ multiple: true, filters: [{ name: 'Video', extensions: SUPPORTED_EXTENSIONS }] });
-            if (selected) this.addFiles(selected);
-          } catch (err) { console.error(err); }
-        };
-      }
+      // Redundant dropzone click listener removed to prevent double dialogs
+
     }
 
     // Mode Toggle (Handled by initBatchAdvanced mainly, but we sync state here)
@@ -2727,11 +2640,22 @@ const batchManager = {
   },
 
   addFiles(paths) {
+    if (!paths) return;
+    const arrayPaths = Array.isArray(paths) ? paths : [paths];
+
+    // Validate absolute paths (Must contain separators)
+    const validPaths = arrayPaths.filter(p => p && (p.includes('/') || p.includes('\\')));
+
+    if (validPaths.length < arrayPaths.length) {
+      console.warn("Ignored files with invalid paths (browser restriction?)");
+      if (window.showToast) window.showToast("Some files skipped (invalid path)", "error");
+    }
+
     // Avoid duplicates
-    const newFiles = paths.filter(p => !this.files.includes(p));
+    const newFiles = validPaths.filter(p => !this.files.includes(p));
     this.files = [...this.files, ...newFiles];
     this.updateUI();
-    showToast(`${newFiles.length} files added to Batch`, 'success');
+    if (newFiles.length > 0) showToast(`${newFiles.length} files added to Batch`, 'success');
   },
 
   removeFile(index) {
@@ -2767,16 +2691,22 @@ const batchManager = {
     if (this.files.length === 0) return showToast('No files in batch queue', 'error');
 
     const args = [];
-    let ext = '.mp4'; // Default extension
+    // Determine extension early
+    let ext = '.mp4';
+    if (this.isSimpleMode) {
+      const formatSelect = document.getElementById('batch-format-simple');
+      ext = formatSelect ? formatSelect.value : '.mp4';
+    } else {
+      // Advanced mode fallback logic
+      const formatSelect = document.getElementById('batch-format-simple');
+      ext = formatSelect ? formatSelect.value : '.mp4';
+    }
 
     // --- Simple Mode Logic ---
     if (this.isSimpleMode) {
       const qualityBtn = document.querySelector('.batch-opt-btn.active');
       const quality = qualityBtn ? qualityBtn.dataset.q : 'medium'; // low, medium, high
-      const formatSelect = document.getElementById('batch-format-simple');
       const unitSelect = document.getElementById('batch-unit-simple');
-
-      ext = formatSelect ? formatSelect.value : '.mp4';
       const unit = unitSelect ? unitSelect.value : 'cpu';
 
       // Base Codec Selection
@@ -2785,58 +2715,79 @@ const batchManager = {
       else if (unit === 'amd') codec = 'h264_amf';
       else if (unit === 'intel') codec = 'h264_qsv';
 
+      // WebM Safety Override & Optimization
+      if (ext === '.webm') {
+        codec = 'libvpx-vp9'; // Force VP9 for WebM compatibility
+        // Note: Avoiding 'vp9_nvenc' for now due to variable driver support.
+        // We will optimize CPU encoding instead.
+      }
+
       args.push('-c:v', codec);
 
-      // CPU Logic
-      if (unit.startsWith('cpu')) {
-        // High Quality (medium size)
-        if (quality === 'medium') args.push('-crf', '23', '-preset', 'medium');
-        // Balanced (good quality, smaller) -> actually 'low' on UI is 'Balanced'
-        else if (quality === 'low') args.push('-crf', '26', '-preset', 'fast');
-        // Max Compression (smallest size) -> 'high' on UI
-        else if (quality === 'high') args.push('-crf', '30', '-preset', 'slow');
+      // --- Args By Codec Type ---
+      if (codec === 'libvpx-vp9') {
+        // Optimizing VP9 Speed (Critical for WebM)
+        // -row-mt 1: Multi-threading
+        // -cpu-used 3: Speed/Quality balance (0=slowest, 5=fastest for encode)
+        args.push('-row-mt', '1', '-threads', '0', '-cpu-used', '3');
 
-        // CPU Low handling (Background/Throttled assumption)
-        if (unit === 'cpu-low') {
-          // We can't easily throttle usage in simple args without 'nice' or complex filters
-          // So we map it to using a lighter preset or just threads limitation?
-          // Let's optimize for "Low Usage" = "slower encode, less priority"
-          // But usually faster preset = LESS CPU *time* total, but HIGHER usage per second.
-          // Slower preset = MORE CPU *time*, but maybe higher sustained load.
-          // Let's just assume cpu-low uses 'medium' preset even for balanced to be safe, or appends threads.
-          // For now, standard behavior.
-        }
+        // VP9 Constant Quality Mode
+        if (quality === 'medium') args.push('-crf', '32', '-b:v', '0');
+        else if (quality === 'low') args.push('-crf', '36', '-b:v', '0');
+        else if (quality === 'high') args.push('-crf', '25', '-b:v', '0');
       }
-      // GPU Logic
       else {
-        // NVENC / AMF / QSV don't use -crf (usually), they use -qp or -cq or global_quality
-        // Simplifying to safe defaults for now
-        // NVENC: -cq
-        if (unit === 'nvidia') {
-          if (quality === 'medium') args.push('-cq', '23', '-preset', 'p4');
-          else if (quality === 'low') args.push('-cq', '28', '-preset', 'p2');
-          else if (quality === 'high') args.push('-cq', '32', '-preset', 'p6');
+        // Standard H.264 / HEVC Logic
+        // CPU Logic
+        if (unit.startsWith('cpu')) {
+          // High Quality (medium size)
+          if (quality === 'medium') args.push('-crf', '23', '-preset', 'medium');
+          // Balanced (good quality, smaller) -> actually 'low' on UI is 'Balanced'
+          else if (quality === 'low') args.push('-crf', '26', '-preset', 'fast');
+          // Max Compression (smallest size) -> 'high' on UI
+          else if (quality === 'high') args.push('-crf', '30', '-preset', 'slow');
+
+          // CPU Low handling
+          if (unit === 'cpu-low') {
+            // Could add -threads 2 here if needed
+          }
         }
-        // AMF/QSV (Generic Fallback)
+        // GPU Logic
         else {
-          // Using bitrate fallback or default params if specific flags aren't extensive 
-          // FFmpeg often maps -crf to something reasonable or ignores it. 
-          // We'll trust FFmpeg wrapper or simple flags.
-          // Actually, explicitly adding basic bitrate targets is safer than CRF for HW if CRF fails?
-          // Let's stick to -crf (x264/5) logic style commands and hope mapping works or use qp.
-          // Common pattern: Use fixed qp for HW.
-          if (quality === 'medium') args.push('-qp', '23');
-          else if (quality === 'low') args.push('-qp', '28');
-          else if (quality === 'high') args.push('-qp', '32');
+          if (unit === 'nvidia') {
+            if (quality === 'medium') args.push('-cq', '23', '-preset', 'p4');
+            else if (quality === 'low') args.push('-cq', '28', '-preset', 'p2');
+            else if (quality === 'high') args.push('-cq', '32', '-preset', 'p6');
+          }
+          else {
+            // AMF/QSV
+            if (quality === 'medium') args.push('-qp', '23');
+            else if (quality === 'low') args.push('-qp', '28');
+            else if (quality === 'high') args.push('-qp', '32');
+          }
         }
       }
 
-      args.push('-c:a', 'aac'); // Default Audio
+      if (ext === '.webm') {
+        args.push('-c:a', 'libvorbis'); // WebM requires Vorbis or Opus
+      } else {
+        args.push('-c:a', 'aac'); // Default Audio for MP4/MKV/MOV
+      }
     }
     // --- Advanced Mode Logic ---
     else {
       // 1. Processing Unit (handled implicitly by Codec selection, but we verify codec)
-      const codec = document.getElementById('batch-adv-codec').value;
+      let codec = document.getElementById('batch-adv-codec').value;
+
+      // WebM Safety Check in Advanced Mode
+      if (ext === '.webm') {
+        const isCompatible = codec.includes('vp9') || codec.includes('vp8') || codec.includes('av1') || codec.includes('libvpx') || codec.includes('libaom');
+        if (!isCompatible && !codec.includes('copy')) {
+          showToast("Forcing VP9 codec for WebM compatibility", "info");
+          codec = 'libvpx-vp9'; // Auto-fix
+        }
+      }
+
       args.push('-c:v', codec);
 
       // 2. Preset
@@ -2875,9 +2826,22 @@ const batchManager = {
 
       // 6. Audio
       const audio = document.getElementById('batch-adv-audio').value;
-      if (audio === 'none') args.push('-an');
-      else if (audio === 'copy') args.push('-c:a', 'copy');
-      else args.push('-c:a', audio);
+
+      if (audio === 'none') {
+        args.push('-an');
+      }
+      else if (ext === '.webm' && (audio === 'copy' || audio === 'aac')) {
+        // Auto-fix for WebM: Force libvorbis if copy/aac selected (since AAC is invalid in WebM)
+        // Note: If source is already Vorbis, copy would work, but we can't know source codec easily here. 
+        // Safer to re-encode to Vorbis for WebM target.
+        args.push('-c:a', 'libvorbis');
+      }
+      else if (audio === 'copy') {
+        args.push('-c:a', 'copy');
+      }
+      else {
+        args.push('-c:a', audio);
+      }
 
       // 7. Custom
       const custom = document.getElementById('batch-adv-custom').value;
@@ -2892,8 +2856,20 @@ const batchManager = {
       // Let's check existing Advanced Panel... it didn't have Format selector either, just Resolution.
       // We will default to MP4 for consistency or use the toggle from Simple mode if visible?
       // Best to grab from the simple selector even if hidden, or default to .mp4
-      const formatSelect = document.getElementById('batch-format-simple');
-      ext = formatSelect ? formatSelect.value : '.mp4';
+      // ext was already determined at top of function
+
+
+      // Safety fix for WebM in Advanced Mode if Audio is 'copy' or 'aac' (incompatible)
+      if (ext === '.webm') {
+        const audio = document.getElementById('batch-adv-audio').value;
+        // If user selected incompatible audio or default copy which might be AAC
+        if (audio === 'aac' || audio === 'copy') {
+          // We can't easily force it if user explicitly said copy, but for WebM it will likely fail if source is AAC.
+          // Let's warn or silent auto-fix only if it's AAC standard.
+          // Actually, remove the previous audio push if we override?
+          // It's cleaner to handle the push here.
+        }
+      }
     }
 
     showToast(`Queuing ${this.files.length} jobs...`, 'info');
@@ -3149,11 +3125,38 @@ function initBatchAdvanced() {
   }
 }
 
+// --- About Links Logic ---
+function initAboutLinks() {
+  const githubBtn = document.getElementById('btn-about-github');
+  const websiteBtn = document.getElementById('btn-about-website');
+
+  if (githubBtn) {
+    githubBtn.addEventListener('click', async () => {
+      try {
+        await openUrl('https://github.com/vudovn/VideoOptimizer');
+      } catch (e) {
+        console.error('Failed to open GitHub:', e);
+      }
+    });
+  }
+
+  if (websiteBtn) {
+    websiteBtn.addEventListener('click', async () => {
+      try {
+        await openUrl('https://github.com/vudovn');
+      } catch (e) {
+        console.error('Failed to open Website:', e);
+      }
+    });
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   presetManager.init();
   if (window.processManager) window.processManager.init();
   if (window.batchManager) window.batchManager.init();
   initBatchAdvanced(); // Initialize Batch Advanced Logic
+  initAboutLinks(); // Initialize About Links
 
   initScrollAnimations();
 

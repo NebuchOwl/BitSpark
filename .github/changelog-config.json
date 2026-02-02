@@ -1,0 +1,34 @@
+{
+  "categories": [
+    {
+      "title": "🚀 Features",
+      "labels": [
+        "feature",
+        "enhancement"
+      ]
+    },
+    {
+      "title": "🐛 Fixes",
+      "labels": [
+        "fix",
+        "bug"
+      ]
+    },
+    {
+      "title": "🧪 Tests",
+      "labels": [
+        "test"
+      ]
+    },
+    {
+      "title": "📦 Dependencies",
+      "labels": [
+        "dependencies"
+      ]
+    }
+  ],
+  "ignore_labels": [
+    "ignore"
+  ],
+  "sort": "ASC"
+}
