@@ -1,4 +1,6 @@
 # Video Optimizer
+![CI](https://github.com/NebuchOwl/video-optimizer/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/NebuchOwl/video-optimizer/actions/workflows/release.yml/badge.svg)
 ![License](https://img.shields.io/github/license/NebuchOwl/video-optimizer?style=for-the-badge&color=blue)
 ![Version](https://img.shields.io/github/v/release/NebuchOwl/video-optimizer?style=for-the-badge&color=orange)
 ![Downloads](https://img.shields.io/github/downloads/NebuchOwl/video-optimizer/total?style=for-the-badge&color=green)
