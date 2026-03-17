@@ -114,12 +114,17 @@ async function main() {
     if (ffmpegPath && fs.existsSync(ffmpegPath)) {
       console.log(`[Setup] Found ffmpeg-static at: ${ffmpegPath}`);
       console.log(`[Setup] Copying to: ${targetPath}`);
+      
+      // Ensure source is readable
+      fs.accessSync(ffmpegPath, fs.constants.R_OK);
+      
       fs.copyFileSync(ffmpegPath, targetPath);
 
       if (platform !== 'win32') {
+        console.log(`[Setup] Setting executable permissions for Unix...`);
         fs.chmodSync(targetPath, 0o755);
       }
-      console.log(`[Setup] Success! Binary ready.`);
+      console.log(`[Setup] Success! Binary ready at ${targetPath}`);
     } else {
       console.error(`[Setup] Failed to locate ffmpeg binary via ffmpeg-static.`);
       // Future: Implement download logic here using info.url
