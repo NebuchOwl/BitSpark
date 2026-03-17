@@ -61,7 +61,8 @@ jobs:
 
       - name: Verify Sidecar (Windows)
         if: matrix.platform == 'windows-latest'
-        run: dir src-tauri\bin\
+        shell: bash
+        run: ls -la src-tauri/bin/
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0

@@ -125,7 +125,8 @@ jobs:
 
       - name: Verify Sidecar (Windows)
         if: matrix.platform == 'windows-latest'
-        run: dir src-tauri\bin\
+        shell: bash
+        run: ls -la src-tauri/bin/
 
       - name: Build Tauri App
         run: npm run tauri build

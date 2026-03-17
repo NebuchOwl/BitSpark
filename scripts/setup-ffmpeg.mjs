@@ -102,6 +102,10 @@ async function main() {
   const targetName = `ffmpeg-${info.triple}${info.ext}`;
   const binDir = path.resolve(rootDir, 'src-tauri', 'bin');
 
+  console.log(`[Setup] Root Directory: ${rootDir}`);
+  console.log(`[Setup] Target Directory: ${binDir}`);
+  console.log(`[Setup] Target Binary Name: ${targetName}`);
+
   if (!fs.existsSync(binDir)) {
     console.log(`[Setup] Creating directory: ${binDir}`);
     fs.mkdirSync(binDir, { recursive: true });
