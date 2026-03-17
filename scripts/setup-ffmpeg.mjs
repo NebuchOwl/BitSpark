@@ -1,101 +1,51 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
 // Robust path resolution relative to the script location
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
-import { createRequire } from 'module';
 
-// Use createRequire to import ffmpeg-static dynamically if needed, 
-// or just standard import if we are in ESM. 
-// However, ffmpeg-static provides a property 'path' that is the executable path.
-// But it only gives the path for the CURRENT platform.
+const platform = process.platform;
+const arch = process.arch;
 
-const require = createRequire(import.meta.url);
-
-// --- Configuration ---
-export const TARGETS = {
-  // Windows
-  'win32-x64': {
-    triple: 'x86_64-pc-windows-msvc',
-    ext: '.exe',
-    url: 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' // Example
+const PLATFORM_MAP = {
+  win32: {
+    x64: { triple: 'x86_64-pc-windows-msvc', ext: '.exe', url: 'https://github.com/BtbN/FFmpeg-Builds/releases' },
+    ia32: { triple: 'i686-pc-windows-msvc', ext: '.exe', url: 'https://github.com/BtbN/FFmpeg-Builds/releases' },
+    arm64: { triple: 'aarch64-pc-windows-msvc', ext: '.exe', url: 'https://github.com/BtbN/FFmpeg-Builds/releases' },
   },
-  'win32-ia32': {
-    triple: 'i686-pc-windows-msvc',
-    ext: '.exe',
-    url: 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' // Usually contains both or separate
+  linux: {
+    x64: { triple: 'x86_64-unknown-linux-gnu', ext: '', url: 'https://johnvansickle.com/ffmpeg/' },
+    ia32: { triple: 'i686-unknown-linux-gnu', ext: '', url: 'https://johnvansickle.com/ffmpeg/' },
+    arm64: { triple: 'aarch64-unknown-linux-gnu', ext: '', url: 'https://johnvansickle.com/ffmpeg/' },
+    arm: { triple: 'armv7-unknown-linux-gnueabihf', ext: '', url: 'https://johnvansickle.com/ffmpeg/' },
   },
-  'win32-arm64': {
-    triple: 'aarch64-pc-windows-msvc',
-    ext: '.exe',
-    url: 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
+  darwin: {
+    x64: { triple: 'x86_64-apple-darwin', ext: '', url: 'https://evermeet.cx/ffmpeg/' },
+    arm64: { triple: 'aarch64-apple-darwin', ext: '', url: 'https://evermeet.cx/ffmpeg/' },
   },
-  // Linux
-  'linux-x64': {
-    triple: 'x86_64-unknown-linux-gnu',
-    ext: '',
-    url: 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz'
-  },
-  'linux-ia32': {
-    triple: 'i686-unknown-linux-gnu',
-    ext: '',
-    url: 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-i686-static.tar.xz'
-  },
-  'linux-arm64': {
-    triple: 'aarch64-unknown-linux-gnu',
-    ext: '',
-    url: 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz'
-  },
-  'linux-arm': {
-    triple: 'armv7-unknown-linux-gnueabihf',
-    ext: '',
-    url: 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-armhf-static.tar.xz'
-  },
-  // MacOS
-  'darwin-x64': {
-    triple: 'x86_64-apple-darwin',
-    ext: '',
-    url: 'https://evermeet.cx/ffmpeg/ffmpeg-latest-mac.zip'
-  },
-  'darwin-arm64': {
-    triple: 'aarch64-apple-darwin',
-    ext: '',
-    url: 'https://evermeet.cx/ffmpeg/ffmpeg-latest-mac.zip' // Universal or specific
-  }
 };
 
-export function getTargetInfo(platform, arch) {
-  // Normalize arch
-  let normalizedArch = arch;
-  if (arch === 'x64') normalizedArch = 'x64';
-  if (arch === 'ia32') normalizedArch = 'ia32';
-  if (arch === 'arm64') normalizedArch = 'arm64';
-  if (arch === 'arm') normalizedArch = 'arm';
-
-  const key = `${platform}-${normalizedArch}`;
-  return TARGETS[key];
-}
-
-export function getBinaryName(platform, arch) {
-  const info = getTargetInfo(platform, arch);
+/**
+ * Resolves the Tauri target triple for sidecar binaries.
+ */
+export function getBinaryName(plt, arc) {
+  const info = PLATFORM_MAP[plt]?.[arc] || (plt === 'linux' && arc === 'arm' ? PLATFORM_MAP.linux.arm : null);
   if (!info) {
-    throw new Error(`Unsupported platform: ${platform}-${arch}`);
+    throw new Error(`Unsupported platform/architecture: ${plt}/${arc}`);
   }
   return `ffmpeg-${info.triple}${info.ext}`;
 }
 
-async function main() {
-  const platform = process.platform;
-  const arch = process.arch;
+async function setup() {
+  console.log(`[Setup] Starting FFmpeg sidecar preparation...`);
 
-  console.log(`[Setup] Detected Host: ${platform}-${arch}`);
-
-  const info = getTargetInfo(platform, arch);
+  const info = PLATFORM_MAP[platform]?.[arch];
   if (!info) {
-    console.error(`[Setup] Error: Platform ${platform}-${arch} is not supported by this script configuration.`);
+    console.error(`[Setup] Unsupported platform/architecture: ${platform}/${arch}`);
     process.exit(1);
   }
 
@@ -117,38 +67,57 @@ async function main() {
   try {
     let ffmpegPath;
     try {
+      const require = createRequire(import.meta.url);
       ffmpegPath = require('ffmpeg-static');
+      console.log(`[Setup] ffmpeg-static found via require: ${ffmpegPath}`);
     } catch (e) {
-      console.warn("[Setup] ffmpeg-static not found or failed to load. Fallback needed?");
+      console.error(`[Setup] ffmpeg-static not found via require: ${e.message}`);
+      // Fallback: search in node_modules manually
+      const possibleFolders = [
+        path.join(rootDir, 'node_modules', 'ffmpeg-static'),
+        path.join(rootDir, '..', 'node_modules', 'ffmpeg-static')
+      ];
+
+      for (const folder of possibleFolders) {
+        const exeFile = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+        const file = path.join(folder, exeFile);
+        console.log(`[Setup] Checking fallback path: ${file}`);
+        if (fs.existsSync(file)) {
+          ffmpegPath = file;
+          break;
+        }
+      }
     }
 
     if (ffmpegPath && fs.existsSync(ffmpegPath)) {
-      console.log(`[Setup] Found ffmpeg-static at: ${ffmpegPath}`);
+      console.log(`[Setup] Copying from: ${ffmpegPath}`);
       console.log(`[Setup] Copying to: ${targetPath}`);
-      
+
       // Ensure source is readable
       fs.accessSync(ffmpegPath, fs.constants.R_OK);
-      
+
       fs.copyFileSync(ffmpegPath, targetPath);
 
       if (platform !== 'win32') {
-        console.log(`[Setup] Setting executable permissions for Unix...`);
+        process.stdout.write(`[Setup] Setting permissions... `);
         fs.chmodSync(targetPath, 0o755);
+        process.stdout.write(`Done.\n`);
       }
       console.log(`[Setup] Success! Binary ready at ${targetPath}`);
     } else {
-      console.error(`[Setup] Failed to locate ffmpeg binary via ffmpeg-static.`);
-      // Future: Implement download logic here using info.url
-      console.log(`[Setup] Please manually download ${info.url} and place it at ${targetPath}`);
+      console.error(`[Setup] CRITICAL: Could not find FFmpeg source binary.`);
       process.exit(1);
     }
-  } catch (e) {
-    console.error(`[Setup] Error during setup: ${e.message}`);
+  } catch (err) {
+    console.error(`[Setup] Error setup-ffmpeg script:`, err);
     process.exit(1);
   }
 }
 
-// execute if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
+// Check if run directly
+if (import.meta.url.includes(path.basename(process.argv[1]))) {
+  setup().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
 }
