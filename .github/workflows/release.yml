@@ -55,6 +55,14 @@ jobs:
       - name: Setup FFmpeg Sidecar
         run: node scripts/setup-ffmpeg.mjs
 
+      - name: Verify Sidecar (Linux/macOS)
+        if: matrix.platform != 'windows-latest'
+        run: ls -la src-tauri/bin/
+
+      - name: Verify Sidecar (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: dir src-tauri\bin\
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:

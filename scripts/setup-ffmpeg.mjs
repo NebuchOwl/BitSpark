@@ -1,5 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Robust path resolution relative to the script location
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
 import { createRequire } from 'module';
 
 // Use createRequire to import ffmpeg-static dynamically if needed, 
@@ -94,13 +100,14 @@ async function main() {
   }
 
   const targetName = `ffmpeg-${info.triple}${info.ext}`;
-  const binariesDir = path.join(process.cwd(), 'src-tauri', 'bin');
+  const binDir = path.resolve(rootDir, 'src-tauri', 'bin');
 
-  if (!fs.existsSync(binariesDir)) {
-    fs.mkdirSync(binariesDir, { recursive: true });
+  if (!fs.existsSync(binDir)) {
+    console.log(`[Setup] Creating directory: ${binDir}`);
+    fs.mkdirSync(binDir, { recursive: true });
   }
 
-  const targetPath = path.join(binariesDir, targetName);
+  const targetPath = path.join(binDir, targetName);
 
   // Try to use ffmpeg-static first as it is reliable for the host
   try {
