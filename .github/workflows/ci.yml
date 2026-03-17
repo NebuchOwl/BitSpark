@@ -30,6 +30,14 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
       - name: Run Unit Tests
         run: npm test
 
@@ -93,6 +101,11 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.rust_target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
 
       - name: Install Linux Dependencies
         if: matrix.platform == 'ubuntu-latest'

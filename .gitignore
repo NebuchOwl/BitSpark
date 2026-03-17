@@ -15,9 +15,10 @@ src-tauri/binaries/
 
 # Internal Tools & AI Agents
 .vscode/
-.agent/
 
 # Project Management & Internal Docs
 docs/
-tests/
-vitest.config.js
+!docs/CI_CD_REPORT.md
+!docs/PLAN.md
+# tests/      <-- Removed from ignore to allow CI to run
+# vitest.config.js <-- Removed from ignore to allow CI to pick up config
