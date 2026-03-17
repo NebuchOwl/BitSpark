@@ -94,7 +94,7 @@ async function main() {
   }
 
   const targetName = `ffmpeg-${info.triple}${info.ext}`;
-  const binariesDir = path.join(process.cwd(), 'src-tauri', 'binaries');
+  const binariesDir = path.join(process.cwd(), 'src-tauri', 'bin');
 
   if (!fs.existsSync(binariesDir)) {
     fs.mkdirSync(binariesDir, { recursive: true });
