@@ -1,4 +1,4 @@
-# Video Optimizer 2.0 - CI/CD Yapısı ve İyileştirme Raporu
+# BitSpark 2.0 - CI/CD Yapısı ve İyileştirme Raporu
 
 Bu rapor, projenin mevcut CI/CD (Sürekli Entegrasyon ve Sürekli Dağıtım) mekanizmalarının analizini, tespit edilen kritik hataları ve gelecekte yapılabilecek iyileştirmeleri içermektedir.
 

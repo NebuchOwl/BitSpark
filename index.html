@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Video Optimizer</title>
+  <title>BitSpark</title>
   <link href="./src/style.css" rel="stylesheet">
 </head>
 
@@ -22,7 +22,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
         </svg>
       </div>
-      <span class="text-xs font-medium text-gray-400">Video Optimizer</span>
+      <span class="text-xs font-medium text-gray-400">BitSpark</span>
     </div>
 
     <!-- Window Controls -->
@@ -172,7 +172,7 @@
       <section id="view-optimizer"
         class="view-section h-full w-full overflow-y-auto p-4 lg:p-8 flex flex-col items-center">
         <div class="mb-4 lg:mb-8 space-y-2 text-center">
-          <h1 class="text-2xl lg:text-3xl font-bold text-white">Video Optimizer</h1>
+          <h1 class="text-2xl lg:text-3xl font-bold text-white">BitSpark</h1>
           <p class="text-sm lg:text-base text-gray-400">Reduce file size without losing quality</p>
         </div>
 
@@ -1355,12 +1355,11 @@
 
                 <h3
                   class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 mb-2">
-                  Video Optimizer</h3>
+                  BitSpark</h3>
 
                 <div class="flex items-center gap-3 mb-6">
-                  <span
-                    class="px-3 py-1 bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold rounded-full uppercase tracking-wider">Beta
-                    0.3.0</span>
+                  <span id="about-version-badge"
+                    class="px-3 py-1 bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold rounded-full uppercase tracking-wider">Loading...</span>
                 </div>
 
                 <p class="text-gray-400 max-w-md mx-auto mb-8 leading-relaxed">
@@ -1390,7 +1389,7 @@
               </div>
 
               <div class="mt-8 text-xs text-gray-700 font-mono">
-                Build ID: b0.3.1-vo
+                Build ID: <span id="about-build-id">loading...</span>
               </div>
             </div>
           </div>

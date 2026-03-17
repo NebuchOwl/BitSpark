@@ -1,10 +1,10 @@
-# Contributing to Video Optimizer 2.0
+# Contributing to BitSpark 2.0
 
-Thank you for your interest in improving Video Optimizer 2.0! This guide focuses on helping you understand the codebase and build the application for different platforms.
+Thank you for your interest in improving BitSpark 2.0! This guide focuses on helping you understand the codebase and build the application for different platforms.
 
 ## 🏗️ Project Architecture
 
-Video Optimizer uses the **Tauri** framework, which combines a lightweight Rust backend with a web-based frontend.
+BitSpark uses the **Tauri** framework, which combines a lightweight Rust backend with a web-based frontend.
 
 ### Folder Structure
 *   **`src/`**: The Frontend Code (UI).
@@ -28,7 +28,7 @@ Video Optimizer uses the **Tauri** framework, which combines a lightweight Rust 
 
 ## 🌍 Cross-Platform Development
 
-Video Optimizer works on Windows, macOS, and Linux. However, since it relies on `ffmpeg`, you must provide the correct binary for your OS.
+BitSpark works on Windows, macOS, and Linux. However, since it relies on `ffmpeg`, you must provide the correct binary for your OS.
 
 ### 1. The FFmpeg Sidecar
 Tauri requires a specific naming convention for external binaries based on the "Target Triple":

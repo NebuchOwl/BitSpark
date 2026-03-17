@@ -51,6 +51,32 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+      - name: Sync Version from Tag
+        shell: bash
+        run: |
+          # Extract version from tag (strip 'v' prefix)
+          TAG="${GITHUB_REF_NAME:-v0.0.0}"
+          VERSION="${TAG#v}"
+          echo "Syncing version to: $VERSION"
+
+          # Update package.json
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+          # Update tauri.conf.json
+          node -e "
+            const fs = require('fs');
+            const conf = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+            conf.version = '$VERSION';
+            fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(conf, null, 2) + '\n');
+          "
+
+          echo "STRIPPED_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Version synced to $VERSION in package.json and tauri.conf.json"
 
       - name: Setup FFmpeg Sidecar
         run: node scripts/setup-ffmpeg.mjs
@@ -68,6 +94,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Vite env vars for About section
+          VITE_APP_VERSION: ${{ env.STRIPPED_VERSION }}
+          VITE_BUILD_NUMBER: ${{ github.run_number }}
           # macOS Signing
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -75,13 +104,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Windows Signing (Requires manual signtool setup in scripts usually, or config in tauri.conf.json)
-          # Tauri v2 reads these for binding if configured in bundle
+          # Windows Signing
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'Video Optimizer ${{ github.ref_name }}'
+          releaseName: 'BitSpark ${{ github.ref_name }}'
           releaseBody: |
             ${{ steps.build_changelog.outputs.changelog }}
             

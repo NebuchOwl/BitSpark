@@ -3125,7 +3125,7 @@ function initBatchAdvanced() {
   }
 }
 
-// --- About Links Logic ---
+// --- About Links & Version Logic ---
 function initAboutLinks() {
   const githubBtn = document.getElementById('btn-about-github');
   const websiteBtn = document.getElementById('btn-about-website');
@@ -3133,7 +3133,7 @@ function initAboutLinks() {
   if (githubBtn) {
     githubBtn.addEventListener('click', async () => {
       try {
-        await openUrl('https://github.com/vudovn/VideoOptimizer');
+        await openUrl('https://github.com/NebuchOwl/BitSpark');
       } catch (e) {
         console.error('Failed to open GitHub:', e);
       }
@@ -3143,11 +3143,25 @@ function initAboutLinks() {
   if (websiteBtn) {
     websiteBtn.addEventListener('click', async () => {
       try {
-        await openUrl('https://github.com/vudovn');
+        await openUrl('https://github.com/NebuchOwl');
       } catch (e) {
         console.error('Failed to open Website:', e);
       }
     });
+  }
+
+  // Inject version and build ID from Vite env (set by CI)
+  const version = import.meta.env.VITE_APP_VERSION || '0.0.0';
+  const buildNumber = import.meta.env.VITE_BUILD_NUMBER || 'dev';
+
+  const versionBadge = document.getElementById('about-version-badge');
+  if (versionBadge) {
+    versionBadge.textContent = `BETA ${version}`;
+  }
+
+  const buildIdEl = document.getElementById('about-build-id');
+  if (buildIdEl) {
+    buildIdEl.textContent = `b${version}-${buildNumber}`;
   }
 }
 

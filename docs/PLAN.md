@@ -1,6 +1,6 @@
 # Plan: CI/CD Structure Analysis and Improvement Report
 
-This plan outlines the steps to analyze the current CI/CD infrastructure of the Video Optimizer 2.0 project and generate a comprehensive report with recommendations.
+This plan outlines the steps to analyze the current CI/CD infrastructure of the BitSpark 2.0 project and generate a comprehensive report with recommendations.
 
 ## 1. Analysis (PHASE 1 - In Progress)
 - [x] Discover project structure (`filesystem`).

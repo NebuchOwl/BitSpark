@@ -1,13 +1,18 @@
-# Video Optimizer 2.0
+# BitSpark 2.0
 > **v2.0.0**
-[![Release](https://img.shields.io/github/v/release/NebuchOwl/video-optimizer)](https://github.com/NebuchOwl/video-optimizer/releases)
+[![CI](https://github.com/NebuchOwl/video-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/NebuchOwl/video-optimizer/actions/workflows/ci.yml)
+[![Release](https://github.com/NebuchOwl/video-optimizer/actions/workflows/release.yml/badge.svg)](https://github.com/NebuchOwl/video-optimizer/actions/workflows/release.yml)
+[![License](https://img.shields.io/badge/License-Custom-blue.svg)](LICENSE.txt)
+[![Latest Release](https://img.shields.io/github/v/release/NebuchOwl/video-optimizer?include_prereleases&style=flat-square)](https://github.com/NebuchOwl/video-optimizer/releases)
+[![Downloads](https://img.shields.io/github/downloads/NebuchOwl/video-optimizer/total?style=flat-square&color=blue)](https://github.com/NebuchOwl/video-optimizer/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](https://github.com/NebuchOwl/video-optimizer)
 
 
 A powerful, high-performance video toolkit built with **Tauri v2**, **Rust**, and **FFmpeg**. Optimize, trim, convert, and inspect your media files with a beautiful, modern interface.
 
 ## 🚀 Features
 
-*   **Video Optimizer**:
+*   **BitSpark**:
     *   **Batch Processing**: Queue multiple files for optimization.
     *   **Smart Compression**: Reduce file size while maintaining quality (H.264, H.265, ProRes).
     *   **Hardware Selection**: Dedicated backend selector for Software (CPU), NVIDIA (NVENC/AV1), AMD (AMF), and Intel (QSV/VP9).
@@ -65,7 +70,7 @@ To build for **macOS** or **Linux**, please read our [Contributing Guide](CONTRI
 ## 👤 Author
 
 **Sina Kop**
-*Video Optimizer*
+*BitSpark*
 
 ## 📄 License
 
